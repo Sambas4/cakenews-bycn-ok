@@ -1,11 +1,17 @@
-<div align="center">
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+# 🍰 CakeNews : Manifeste Humain (v3.1)
 
-  <h1>Built with AI Studio</h2>
+CakeNews est la plateforme d'information virale où l'IA n'a pas sa place. Nous croyons que la vérité est une affaire de tripes, d'intuition et d'audit humain.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+---
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## 💎 1. L'ADN 100% Humain
+- **No AI Policy** : Aucun algorithme de réécriture. Tous les résumés (Flash) et articles (Deep) sont rédigés par nos journalistes.
+- **Human Verification** : Chaque signalement (Report) est traité par une équipe d'auditeurs réels.
+- **Tactile Viral** : Une interface pensée pour le mobile, ultra-rapide, sans le poids des bibliothèques d'IA.
 
-</div>
+---
+
+## 🚀 2. Optimisation Mobile
+- **Flash Mode** : La quintessence de l'info en 10 secondes.
+- **Audit de Résonance** : Transparence totale sur l'impact de l'info.

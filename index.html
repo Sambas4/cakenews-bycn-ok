@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="L'information virale, vérifiée par l'humain.">
+    
+    <title>CakeNews | Angular Edition</title>
+    
+    <link rel="manifest" href="/manifest.json">
+    <link rel="preconnect" href="https://images.unsplash.com">
+    <link rel="dns-prefetch" href="https://images.unsplash.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Open Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+                    },
+                    animation: {
+                        'marquee-left': 'marquee-left 25s linear infinite',
+                        'flash': 'flash 2s infinite',
+                    },
+                    keyframes: {
+                        'marquee-left': {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(-50%)' }
+                        },
+                        'flash': {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0.4' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        :root {
+            --cake-red: #ff0000;
+            --cake-black: #000000;
+        }
+        html {
+            font-size: 17px; /* Easing mobile reading */
+        }
+        body {
+            font-family: '"Open Sans"', system-ui, -apple-system, sans-serif;
+            background-color: var(--cake-black);
+            color: #ffffff;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            overscroll-behavior-y: none;
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        
+        @media (min-width: 640px) {
+            app-root {
+                max-width: 450px;
+                margin: 0 auto;
+                border-left: 1px solid #222;
+                border-right: 1px solid #222;
+                display: block;
+                height: 100%;
+            }
+        }
+        app-root {
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: #000;
+        }
+    </style>
+</head>
+<body class="bg-black">
+    <app-root></app-root>
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

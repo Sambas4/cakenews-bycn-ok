@@ -1,0 +1,8 @@
+{
+  "name": "Remix: CakeNews - by Angular",
+  "description": "Le TikTok de l\u0027information virale : court, exclusif et ultra-rapide. Balayez horizontalement pour les actus, verticalement pour les détails.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
