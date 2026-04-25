@@ -2,11 +2,12 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ModalService } from '../services/modal.service';
 import { ReportPopupComponent } from './report-popup.component';
+import { HallOfFameModalComponent } from './hall-of-fame-modal.component';
 
 @Component({
   selector: 'app-global-modal-registry',
   standalone: true,
-  imports: [CommonModule, ReportPopupComponent],
+  imports: [CommonModule, ReportPopupComponent, HallOfFameModalComponent],
   template: `
     @if (modal.activeModal()) {
       <div class="fixed inset-0 z-[1000]">
@@ -25,7 +26,7 @@ import { ReportPopupComponent } from './report-popup.component';
             <div class="fixed inset-0 bg-black flex items-center justify-center text-white">TrophyViewer Placeholder</div>
           }
           @case ('HALL_OF_FAME') {
-            <div class="fixed inset-0 bg-black flex items-center justify-center text-white">HallOfFame Placeholder</div>
+            <app-halloffeame-modal (onClose)="modal.closeModal()"></app-halloffeame-modal>
           }
           @case ('SHARE') {
             <div class="fixed inset-0 bg-black flex items-center justify-center text-white">ShareModal Placeholder</div>

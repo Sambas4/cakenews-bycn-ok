@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { firebaseConfig } from '../firebase.config';
 
@@ -9,6 +9,16 @@ const app = initializeApp(firebaseConfig);
 
 // 2. Export des instances pour les utiliser partout dans l'application
 export const db = getFirestore(app);
+
+// Activer le mode Oflfine (Cache Persistant) pour Firestore
+enableMultiTabIndexedDbPersistence(db).catch((err) => {
+  if (err.code == 'failed-precondition') {
+    console.warn("Multiple tabs open, persistence can only be enabled in one tab at a a time.");
+  } else if (err.code == 'unimplemented') {
+    console.warn("The current browser doesn't support all of the features required to enable persistence.");
+  }
+});
+
 export const auth = getAuth(app);
 
 @Injectable({

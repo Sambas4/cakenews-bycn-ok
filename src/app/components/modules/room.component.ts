@@ -5,6 +5,8 @@ import { LucideAngularModule } from 'lucide-angular';
 import { ExternalVoice, Comment } from '../../types';
 import { InteractionService } from '../../services/interaction.service';
 import { DataService } from '../../services/data.service';
+import { UserService } from '../../services/user.service';
+import { AuthService } from '../../services/auth.service';
 
 type RoomTab = 'debates' | 'echoes';
 
@@ -81,14 +83,14 @@ type RoomTab = 'debates' | 'echoes';
           </div>
           
           <!-- Comment Input -->
-          <div class="shrink-0 p-4 bg-gradient-to-t from-black via-black/95 to-transparent sticky bottom-0 left-0 right-0 z-50 pt-8 mt-auto border-t border-black">
+          <div class="shrink-0 p-4 bg-gradient-to-t from-black via-black/95 to-[rgba(0,0,0,0.8)] sticky bottom-[64px] sm:bottom-[70px] left-0 right-0 z-[50] mt-auto border-t border-black backdrop-blur-sm">
             @if (replyingTo) {
                <div class="flex items-center justify-between bg-zinc-800 rounded-t-xl px-4 py-2 border-b border-white/10">
                  <span class="text-xs font-bold text-white/60 truncate">En réponse à {{replyingTo.author}}...</span>
                  <button (click)="cancelReply()" class="text-white/40 hover:text-white"><lucide-icon name="x" class="w-3 h-3"></lucide-icon></button>
                </div>
             }
-            <div class="flex items-center gap-2 bg-zinc-900/80 backdrop-blur-md p-1 pl-4 border border-white/10" [ngClass]="replyingTo ? 'rounded-b-2xl' : 'rounded-full'">
+            <div class="flex items-center gap-2 bg-zinc-900/80 p-1 pl-4 border border-white/10" [ngClass]="replyingTo ? 'rounded-b-2xl' : 'rounded-full'">
               <input 
                 type="text" 
                 [(ngModel)]="newCommentText"
@@ -98,11 +100,15 @@ type RoomTab = 'debates' | 'echoes';
               />
               <button 
                 (click)="postComment()"
-                [disabled]="!newCommentText.trim()"
+                [disabled]="!newCommentText.trim() || isPosting()"
                 class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-95 disabled:opacity-50" 
                 [style.backgroundColor]="accentColor"
               >
-                <lucide-icon name="send" class="w-4 h-4 text-black"></lucide-icon>
+                @if (isPosting()) {
+                  <lucide-icon name="loader" class="w-4 h-4 text-black animate-spin"></lucide-icon>
+                } @else {
+                  <lucide-icon name="send" class="w-4 h-4 text-black"></lucide-icon>
+                }
               </button>
             </div>
           </div>
@@ -163,11 +169,13 @@ export class RoomModuleComponent {
 
   private interaction = inject(InteractionService);
   private dataService = inject(DataService);
+  private userService = inject(UserService);
 
   activeTab = signal<RoomTab>('debates');
   newCommentText = '';
   replyingTo: Comment | null = null;
   likedComments = new Set<string>();
+  isPosting = signal(false);
 
   initReply(comment: Comment) {
     this.replyingTo = comment;
@@ -182,36 +190,30 @@ export class RoomModuleComponent {
   }
 
   likeComment(commentId: string) {
-    // Local toggle
     if (this.likedComments.has(commentId)) {
         this.likedComments.delete(commentId);
+        // TODO: sync comment like removal to DB when array updates are supported for nested elements
     } else {
         this.likedComments.add(commentId);
-    }
-    
-    // Update article state
-    const articles = this.dataService.articles();
-    const article = articles.find(a => a.id === this.articleId);
-    if (article) {
-       const updatedComments = this.comments.map(c => {
-         if (c.id === commentId) {
-            const isLike = this.likedComments.has(commentId);
-            return { ...c, likes: (c.likes || 0) + (isLike ? 1 : -1) };
-         }
-         return c;
-       });
-       this.dataService.upsertArticle({ ...article, roomComments: updatedComments });
+        // TODO: sync comment like addition to DB
     }
   }
 
-  postComment() {
-    if (!this.newCommentText.trim() || !this.articleId) return;
+  async postComment() {
+    if (!this.newCommentText.trim() || !this.articleId || this.isPosting()) return;
+    this.isPosting.set(true);
+
+    const profile = this.userService.currentUserProfile();
+    
+    // Quick time formatter
+    const now = new Date();
+    const timeStr = `${now.getHours()}h${now.getMinutes().toString().padStart(2, '0')}`;
 
     const newComment: Comment = {
       id: Date.now().toString(),
-      author: 'Vous',
-      avatar: 'https://ui-avatars.com/api/?name=Vous&background=random',
-      time: 'À l\'instant',
+      author: profile?.username || 'Anonyme',
+      avatar: profile?.avatarUrl || 'https://ui-avatars.com/api/?name=Anonyme&background=random',
+      time: timeStr,
       content: this.newCommentText.trim(),
       likes: 0
     };
@@ -223,18 +225,15 @@ export class RoomModuleComponent {
       };
     }
 
-    // Sauvegarde en base localement
-    const articles = this.dataService.articles();
-    const article = articles.find(a => a.id === this.articleId);
-    if (article) {
-       const updatedComments = [...(article.roomComments || []), newComment];
-       this.dataService.upsertArticle({ ...article, roomComments: updatedComments });
+    try {
+      await this.dataService.addComment(this.articleId, newComment);
+      this.newCommentText = '';
+      this.replyingTo = null;
+      this.interaction.logComment(this.articleId);
+    } catch(e) {
+      console.error("Failed to post comment", e);
+    } finally {
+      this.isPosting.set(false);
     }
-
-    this.newCommentText = '';
-    this.replyingTo = null;
-    
-    // MàJ Statut Utilisateur
-    this.interaction.logComment(this.articleId);
   }
 }

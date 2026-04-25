@@ -1,266 +1,257 @@
-import { Component, inject, OnInit, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
-import { Category } from '../types';
-import { CATEGORIES, CATEGORY_COLORS, getTextColor } from '../constants';
 import { InteractionService } from '../services/interaction.service';
-import { TranslationService } from '../services/translation.service';
-import { ModalService } from '../services/modal.service';
+import { AuthService } from '../services/auth.service';
+import { UserService } from '../services/user.service';
 import { Router } from '@angular/router';
 
-type ProfileTab = 'identity' | 'zone' | 'prefs';
+type ProfileTab = 'activity' | 'settings';
 
 @Component({
   selector: 'app-profile-view',
   standalone: true,
   imports: [CommonModule, FormsModule, LucideAngularModule],
   template: `
-    <div class="w-full h-full relative bg-black overflow-hidden flex flex-col hide-scrollbar">
-      <!-- STATIC HEADER & TABS -->
-      <div class="sticky top-0 z-[50] flex flex-col transform-gpu">
-        <div class="bg-black/95 border-b border-white/5 pt-12 backdrop-blur-sm supports-[backdrop-filter]:bg-black/80">
-          <div class="px-8 pb-6 flex items-center justify-between">
-            <h1 class="text-3xl font-[1000] uppercase tracking-normal text-white">Profil</h1>
-            <button (click)="logout()" class="p-2 bg-zinc-900 border border-white/10 rounded-full hover:border-[#ff0000] hover:text-[#ff0000] transition-colors">
-              <lucide-icon name="log-out" class="w-4 h-4"></lucide-icon>
-            </button>
-          </div>
-          
-          <div class="flex justify-around items-center">
-            @for (tab of tabs; track tab.id) {
-              <button 
-                (click)="activeTab = tab.id" 
-                class="flex flex-col items-center gap-1.5 py-4 transition-all duration-75 relative flex-1 active:scale-98 touch-manipulation cursor-pointer"
-                [ngClass]="activeTab === tab.id ? 'text-white' : 'text-white/20'"
-              >
-                <lucide-icon [name]="tab.icon" class="w-4 h-4"></lucide-icon>
-                <span class="text-[9px] font-black uppercase tracking-[0.2em]">{{tab.label}}</span>
-                @if (activeTab === tab.id) {
-                  <div class="absolute bottom-0 left-4 right-4 h-[2px] bg-sky-500"></div>
-                }
-              </button>
-            }
-          </div>
+    <div class="w-full h-full bg-black flex flex-col text-white relative hide-scrollbar overflow-hidden">
+      
+      <!-- HEADER -->
+      <div class="flex items-center justify-between p-6 bg-black z-10 sticky top-0 border-b border-zinc-900 flex-shrink-0">
+        <button (click)="goBack()" class="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 text-white flex items-center justify-center hover:bg-zinc-800 transition-colors shadow-sm cursor-pointer active:scale-95">
+          <lucide-icon name="chevron-left" class="w-5 h-5"></lucide-icon>
+        </button>
+        <h1 class="text-xs font-[1000] tracking-[0.2em] uppercase text-zinc-500">Mon Espace</h1>
+        <div class="w-10 h-10"></div> <!-- spacer -->
+      </div>
+
+      <!-- COMPACT USER BAR -->
+      <div class="px-6 flex items-center justify-between gap-4 py-6 border-b border-zinc-900/50 flex-shrink-0">
+         <div class="flex items-center gap-4">
+           <div class="w-16 h-16 rounded-full border border-zinc-800 bg-zinc-900 flex items-center justify-center overflow-hidden flex-shrink-0" [ngStyle]="{'background-color': userService.currentUserProfile()?.avatarBg || '#000'}">
+              <img [src]="userService.currentUserProfile()?.avatarUrl" class="w-[120%] h-[120%] object-contain" />
+           </div>
+           <div class="flex flex-col">
+              <h2 class="text-xl font-[1000] text-white tracking-tight leading-tight">{{ userService.currentUserProfile()?.username || 'Utilisateur' }}</h2>
+              <div class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500 mt-1">
+                <lucide-icon name="activity" class="w-3 h-3 text-[#7ae25c]"></lucide-icon>
+                {{ readArticles().length }} articles explorés
+              </div>
+           </div>
+         </div>
+         @if(userService.currentUserProfile()?.isAdmin) {
+             <button (click)="goToAdmin()" class="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 w-10 h-10 rounded-full flex items-center justify-center hover:bg-indigo-500/30 transition-colors">
+               <lucide-icon name="shield-alert" class="w-4 h-4"></lucide-icon>
+             </button>
+         }
+      </div>
+
+      <!-- TABS -->
+      <div class="px-6 py-4 flex-shrink-0">
+        <div class="flex bg-zinc-900/50 rounded-xl p-1 border border-zinc-800">
+          <button (click)="activeTab.set('activity')" [ngClass]="activeTab() === 'activity' ? 'bg-zinc-800 text-white shadow-md' : 'text-zinc-500'" class="flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all">
+            Activité & Biblio
+          </button>
+          <button (click)="activeTab.set('settings')" [ngClass]="activeTab() === 'settings' ? 'bg-zinc-800 text-white shadow-md' : 'text-zinc-500'" class="flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all">
+            Paramètres
+          </button>
         </div>
       </div>
 
-      <!-- SCROLLABLE CONTENT -->
-      <div class="flex-1 overflow-y-auto hide-scrollbar relative bg-black px-8 pt-8 pb-32">
-        @if (activeTab === 'identity') {
-          <div class="flex flex-col gap-6">
-            <!-- CARTE D'IDENTITÉ -->
-            <div class="bg-zinc-900/50 border border-white/5 rounded-3xl p-6 relative overflow-hidden flex items-center gap-6">
-              <div class="w-20 h-20 shrink-0 rounded-full border-2 border-white/10 overflow-hidden">
-                 <img src="https://i.pravatar.cc/150?u=current" referrerpolicy="no-referrer" class="w-full h-full object-cover relative z-10" />
-              </div>
-              <div class="flex flex-col z-10">
-                <h2 class="text-2xl font-[1000] uppercase leading-none mb-1 text-white">Alex Carter</h2>
-                <div class="flex items-center gap-2 mt-2">
-                  <span class="px-2 py-0.5 bg-white text-black text-[8px] font-black uppercase tracking-widest rounded-sm" [style.backgroundColor]="rank().color">
-                      {{rank().label}}
-                  </span>
-                </div>
-              </div>
+      <!-- SCROLLABLE CONTENT (Takes remaining space) -->
+      <div class="flex-1 overflow-y-auto px-6 pb-20 relative hide-scrollbar">
+        
+        <!-- === ACTIVITY TAB === -->
+        @if (activeTab() === 'activity') {
+          <div class="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <!-- DNA / RÉSUMÉ -->
+            <div class="bg-zinc-900/40 rounded-[20px] p-5 border border-zinc-800 flex flex-col items-start relative overflow-hidden">
+               <div class="absolute -top-10 -right-10 w-32 h-32 bg-[#7ae25c]/10 blur-3xl rounded-full"></div>
+               <h3 class="text-[10px] font-black uppercase tracking-widest text-[#7ae25c] mb-3 flex items-center gap-2 relative z-10">
+                  <lucide-icon name="pie-chart" class="w-4 h-4"></lucide-icon> Ton ADN Lecteur
+               </h3>
+               <p class="text-sm font-bold text-white leading-relaxed relative z-10">
+                  Tu consommes <span class="text-[#7ae25c]">{{ adnStats().topCatPercent }}% {{ adnStats().topCat }}</span>,
+                  {{ adnStats().secondCatPercent }}% {{ adnStats().secondCat }} et {{ adnStats().thirdCatPercent }}% {{ adnStats().thirdCat }}.
+               </p>
+               <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mt-4 pt-4 border-t border-zinc-800/50 w-full relative z-10">
+                  <lucide-icon name="clock" class="w-3 h-3 inline mr-1"></lucide-icon> Tu lis surtout des formats {{ adnStats().formatPref }}.
+               </p>
             </div>
 
-            <!-- TRUST SCORE -->
-            <div class="bg-zinc-900/40 border border-white/5 rounded-3xl p-6 flex flex-col items-center">
-              <span class="text-[10px] font-black uppercase tracking-widest text-white/50 mb-3">Trust Score</span>
-              <div class="text-4xl font-[1000] mb-3" [ngClass]="userStats().trustScore > 80 ? 'text-emerald-500' : 'text-white'">
-                 {{userStats().trustScore}}%
-              </div>
-              <div class="w-full bg-black rounded-full h-1.5">
-                 <div class="bg-emerald-500 h-1.5 rounded-full" [style.width]="userStats().trustScore + '%'"></div>
-              </div>
-            </div>
-
-            <!-- DATA ROW -->
-            <div class="grid grid-cols-2 gap-4">
-              <div class="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center">
-                <lucide-icon name="message-square" class="w-4 h-4 mb-2 text-white/40"></lucide-icon>
-                <span class="text-lg font-[1000] text-white">{{userStats().commentsPosted}}</span>
-                <span class="text-[8px] font-bold text-white/40 uppercase tracking-widest">Débats</span>
-              </div>
-              <div class="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center">
-                <lucide-icon name="heart" class="w-4 h-4 mb-2 text-sky-500"></lucide-icon>
-                <span class="text-lg font-[1000] text-white">{{userStats().likesReceived}}</span>
-                <span class="text-[8px] font-bold text-white/40 uppercase tracking-widest">Reçus</span>
-              </div>
-            </div>
-            
-            <button (click)="openModal('HALL_OF_FAME')" class="w-full py-4 bg-zinc-900/80 border border-[#ffd700]/30 rounded-2xl flex items-center justify-center gap-2 text-[#ffd700] active:scale-95 transition-all">
-              <lucide-icon name="trophy" class="w-4 h-4"></lucide-icon>
-              <span class="text-[10px] font-black uppercase tracking-[0.2em]">Registres Hall of Fame</span>
-            </button>
-          </div>
-        }
-
-        @if (activeTab === 'zone') {
-          <div class="flex flex-col gap-6">
-            <div class="flex items-center gap-2 mb-2">
-              <div class="w-2 h-2 rounded-full bg-sky-500"></div>
-              <h3 class="text-xs font-black uppercase tracking-widest text-white/70">Ancrage Territorial</h3>
-            </div>
-
-            <div class="bg-zinc-900/50 border border-white/5 rounded-3xl p-6 transition-all" [ngClass]="isEditingLoc ? 'border-sky-500/50' : ''">
-              @if (!userLocation().isSet || isEditingLoc) {
-                <div class="space-y-4">
-                  <p class="text-[11px] font-medium text-white/60 leading-relaxed mb-4">Ces données permettent de cibler précisément l'information locale et de certifier votre présence dans cette zone rattachée.</p>
-                  
-                  <div class="space-y-2">
-                    <input type="text" [(ngModel)]="locForm.country" placeholder="Pays" class="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-sm text-white font-bold outline-none focus:border-sky-500" />
-                    <input type="text" [(ngModel)]="locForm.city" placeholder="Ville" class="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-sm text-white font-bold outline-none focus:border-sky-500" />
-                    <input type="text" [(ngModel)]="locForm.neighborhood" placeholder="Quartier / Arrondissement" class="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-sm text-white font-bold outline-none focus:border-sky-500" />
-                  </div>
-                  
-                  <button 
-                    (click)="handleSaveLoc()"
-                    [disabled]="!locForm.city || !locForm.neighborhood"
-                    class="w-full py-4 bg-sky-500 text-white font-black uppercase text-[10px] tracking-[0.2em] rounded-xl flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
-                  >
-                    Valider le secteur
+            <!-- LIBRARY -->
+            <div>
+               <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">Historique & Sauvegardes</h3>
+               
+               <div class="flex flex-col gap-2">
+                  <button class="w-full bg-zinc-900/40 border border-zinc-800 rounded-[20px] p-4 flex items-center justify-between hover:bg-zinc-800 transition-colors group">
+                    <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-full bg-[#38bdf8]/10 flex items-center justify-center">
+                         <lucide-icon name="bookmark" class="w-3 h-3 text-[#38bdf8] fill-[#38bdf8]/20"></lucide-icon>
+                      </div>
+                      <span class="text-xs font-[1000] uppercase tracking-wider text-white">Articles Sauvegardés</span>
+                    </div>
+                    <span class="text-[10px] font-bold text-zinc-500 bg-zinc-900 px-2 py-1 rounded-md">{{savedArticles().length}}</span>
                   </button>
-                </div>
-              } @else {
-                <div class="flex items-center justify-between">
-                  <div class="flex flex-col">
-                    <span class="text-2xl font-[1000] text-white uppercase tracking-tighter">{{userLocation().neighborhood}}</span>
-                    <span class="text-[10px] font-bold text-sky-400 uppercase tracking-widest mt-1">{{userLocation().city}}, {{userLocation().country}}</span>
-                  </div>
-                  <button (click)="isEditingLoc = true" class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/60 hover:text-white">
-                    <lucide-icon name="edit-2" class="w-4 h-4"></lucide-icon>
+
+                  <button class="w-full bg-zinc-900/40 border border-zinc-800 rounded-[20px] p-4 flex items-center justify-between hover:bg-zinc-800 transition-colors group">
+                    <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
+                         <lucide-icon name="history" class="w-3 h-3 text-white/50 group-hover:text-white transition-colors"></lucide-icon>
+                      </div>
+                      <span class="text-xs font-[1000] uppercase tracking-wider text-white">Historique Récent</span>
+                    </div>
+                    <lucide-icon name="chevron-right" class="w-4 h-4 text-zinc-600"></lucide-icon>
                   </button>
-                </div>
-              }
-            </div>
-            
-            <div class="p-4 border border-sky-500/20 bg-sky-500/5 rounded-2xl flex gap-3 items-start mt-4">
-              <lucide-icon name="info" class="w-4 h-4 text-sky-500 shrink-0 mt-0.5"></lucide-icon>
-              <p class="text-[10px] text-white/60 leading-relaxed font-medium">L'algorithme priorisera désormais les investigations géolocalisées sur votre secteur validé.</p>
+                  
+                  <button class="w-full bg-[#7ae25c]/10 border border-[#7ae25c]/20 rounded-[20px] p-4 flex items-center justify-between hover:bg-[#7ae25c]/20 transition-colors mt-2 group relative overflow-hidden">
+                    <div class="flex items-center gap-3 relative z-10">
+                      <div class="w-8 h-8 rounded-full bg-[#7ae25c] flex items-center justify-center">
+                         <lucide-icon name="sparkles" class="w-4 h-4 text-black"></lucide-icon>
+                      </div>
+                      <div class="flex flex-col items-start gap-1">
+                        <span class="text-xs font-[1000] uppercase tracking-wider text-[#7ae25c]">Tu as manqué ça aujourd'hui</span>
+                        <span class="text-[9px] font-black uppercase tracking-[0.1em] text-[#7ae25c]/60 group-hover:text-[#7ae25c] transition-colors">👉 Continuer la lecture</span>
+                      </div>
+                    </div>
+                  </button>
+               </div>
             </div>
           </div>
         }
 
-        @if (activeTab === 'prefs') {
-          <div class="flex flex-col gap-6">
-            <div class="flex items-center gap-2 mb-2">
-              <div class="w-2 h-2 rounded-full bg-white"></div>
-              <h3 class="text-xs font-black uppercase tracking-widest text-white/70">Filtres Algorithmiques</h3>
-            </div>
+        <!-- === SETTINGS TAB === -->
+        @if (activeTab() === 'settings') {
+          <!-- Important: h-full so that the flex container stretches entirely, pushing danger zone to the bottom -->
+          <div class="min-h-full flex flex-col justify-between animate-in fade-in slide-in-from-bottom-2 duration-300">
             
-            <div class="grid grid-cols-2 gap-3">
-              @for (cat of CATEGORIES; track cat) {
-                <button
-                  (click)="togglePref(cat)"
-                  class="p-4 rounded-2xl font-[1000] uppercase text-[10px] tracking-widest border transition-all flex flex-col items-start gap-4 text-left relative overflow-hidden"
-                  [ngClass]="preferences().includes(cat) ? getTextColor(cat) + ' border-transparent' : 'bg-zinc-900/40 border-white/5 text-white/40'"
-                  [style.backgroundColor]="preferences().includes(cat) ? getCategoryColor(cat) : undefined"
-                >
-                  <div class="flex w-full justify-between items-center">
-                    <lucide-icon [name]="getIconForCategory(cat)" class="w-4 h-4"></lucide-icon>
-                    @if (preferences().includes(cat)) {
-                      <div class="w-2 h-2 rounded-full" [ngClass]="getTextColor(cat) === 'text-black' ? 'bg-black' : 'bg-white'"></div>
-                    }
+            <div class="space-y-2">
+               <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">Configuration</h3>
+               
+               <div class="bg-zinc-900/40 border border-zinc-800 rounded-[20px] overflow-hidden flex flex-col">
+                  <div class="flex items-center justify-between p-5 border-b border-zinc-800">
+                     <div class="flex items-center gap-3">
+                        <lucide-icon name="languages" class="w-4 h-4 text-zinc-400"></lucide-icon>
+                        <span class="text-xs font-[1000] uppercase tracking-wider text-white">Langue</span>
+                     </div>
+                     <span class="text-[9px] font-black uppercase tracking-widest text-[#7ae25c] bg-[#7ae25c]/10 px-2 py-1 rounded">Français</span>
                   </div>
-                  <span>{{t()('CAT_' + cat.toUpperCase(), cat)}}</span>
-                </button>
-              }
+                  
+                  <div class="flex items-center justify-between p-5">
+                     <div class="flex items-center gap-3">
+                        <lucide-icon name="monitor" class="w-4 h-4 text-zinc-400"></lucide-icon>
+                        <span class="text-xs font-[1000] uppercase tracking-wider text-white">Mode Sombre</span>
+                     </div>
+                     <div class="w-8 h-4 bg-[#7ae25c] rounded-full relative opacity-50 cursor-not-allowed">
+                        <div class="absolute right-0.5 top-0.5 w-3 h-3 bg-black rounded-full"></div>
+                     </div>
+                  </div>
+               </div>
             </div>
-            
-            <div class="w-full h-px bg-white/10 my-4"></div>
-            
-            <button class="w-full bg-zinc-900/40 border border-white/5 hover:border-white/20 text-white p-5 rounded-2xl flex justify-between items-center text-[10px] font-black uppercase tracking-widest transition-colors mb-2">
-                Archives d'investigations <lucide-icon name="chevron-right" class="w-4 h-4 text-white/40"></lucide-icon>
-            </button>
-            <button class="w-full bg-zinc-900/40 border border-white/5 hover:border-white/20 text-white p-5 rounded-2xl flex justify-between items-center text-[10px] font-black uppercase tracking-widest transition-colors">
-                Traces d'activité <lucide-icon name="chevron-right" class="w-4 h-4 text-white/40"></lucide-icon>
-            </button>
+
+            <!-- DANGER ZONE (Pushed to bottom) -->
+            <div class="pt-8 flex flex-col gap-2 pb-6 mt-12 mb-safe">
+               <button (click)="logout()" class="w-full bg-zinc-900 border border-zinc-800 text-zinc-400 font-[1000] uppercase tracking-widest text-[10px] py-4 rounded-[16px] flex items-center justify-center gap-2 hover:bg-zinc-800 hover:text-white transition-colors">
+                  <lucide-icon name="log-out" class="w-3 h-3"></lucide-icon> Se déconnecter
+               </button>
+
+               <button (click)="deleteAccount()" class="w-full bg-zinc-950 border border-red-900/30 text-red-500/50 font-black uppercase tracking-widest text-[10px] py-4 rounded-[16px] flex items-center justify-center gap-2 hover:bg-black/40 hover:text-red-500 hover:border-red-500/50 transition-colors">
+                  <lucide-icon name="trash-2" class="w-3 h-3"></lucide-icon> Supprimer mon compte
+               </button>
+               
+               <p class="text-center mt-2 text-[9px] font-bold text-zinc-700 uppercase tracking-widest">
+                Action irréversible. Toutes vos données seront effacées.
+               </p>
+            </div>
           </div>
         }
+
       </div>
     </div>
   `
 })
 export class ProfileViewComponent implements OnInit {
   private interaction = inject(InteractionService);
-  private translation = inject(TranslationService);
-  private modal = inject(ModalService);
+  private location = inject(Location);
+  public authService = inject(AuthService);
+  public userService = inject(UserService);
   private router = inject(Router);
 
-  t = this.translation.t;
-  CATEGORIES = CATEGORIES;
-  
-  userLocation = this.interaction.userLocation;
-  userStats = this.interaction.userStats;
-  preferences = this.interaction.userInterests;
+  readArticles = this.interaction.readArticles;
+  savedArticles = this.interaction.savedArticles;
+  sessionHistory = this.interaction.sessionHistory;
 
-  activeTab: ProfileTab = 'identity';
+  activeTab = signal<ProfileTab>('activity');
 
-  tabs: {id: ProfileTab, label: string, icon: string}[] = [
-    { id: 'identity', label: 'Identité', icon: 'user' },
-    { id: 'zone', label: 'Zone', icon: 'map-pin' },
-    { id: 'prefs', label: 'Réglages', icon: 'sliders' }
-  ];
+  adnStats = computed(() => {
+    const history = this.sessionHistory();
+    if (history.length === 0) {
+      return { topCat: 'Tech', topCatPercent: 70, secondCat: 'Business', secondCatPercent: 20, thirdCat: 'Sport', thirdCatPercent: 10, formatPref: 'courts' };
+    }
 
-  isEditingLoc = false;
-  locForm = { neighborhood: '', city: '', country: 'Gabon' };
+    const categoryCount: Record<string, number> = {};
+    let totalDuration = 0;
+    
+    history.forEach(session => {
+       const cat = session.category.toLowerCase().trim();
+       categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+       totalDuration += session.durationMs;
+    });
 
-  rank = computed(() => {
-    const score = this.userStats().likesGiven + (this.userStats().commentsPosted * 5);
-    if (score > 1000) return { label: 'Maître Débatteur', color: '#ffcc00' };
-    if (score > 500) return { label: 'Influenceur', color: '#00f0ff' };
-    if (score > 100) return { label: 'Initié', color: '#22c55e' };
-    return { label: 'Observateur', color: '#ffffff' };
+    const totalArticles = history.length;
+    const sortedCats = Object.entries(categoryCount).sort((a, b) => b[1] - a[1]);
+    
+    const topCat = sortedCats[0]?.[0] || 'tech';
+    const topPercent = Math.round(((sortedCats[0]?.[1] || 0) / totalArticles) * 100);
+    
+    const secondCat = sortedCats[1]?.[0] || 'business';
+    const secondPercent = Math.round(((sortedCats[1]?.[1] || 0) / totalArticles) * 100);
+    
+    const thirdCat = sortedCats[2]?.[0] || 'sport';
+    const thirdPercent = Math.round(((sortedCats[2]?.[1] || 0) / totalArticles) * 100);
+
+    const avgDuration = totalDuration / totalArticles;
+    const formatPref = avgDuration > 120000 ? 'longs et détaillés' : 'courts et rapides';
+
+    return {
+      topCat, topCatPercent: topPercent || 70,
+      secondCat, secondCatPercent: secondPercent || 20,
+      thirdCat, thirdCatPercent: thirdPercent || 10,
+      formatPref
+    };
   });
 
   ngOnInit() {
-    this.locForm = {
-      neighborhood: this.userLocation().neighborhood,
-      city: this.userLocation().city,
-      country: this.userLocation().country || 'Gabon'
-    };
-    this.isEditingLoc = !this.userLocation().isSet;
   }
 
-  handleSaveLoc() {
-    if(this.locForm.neighborhood && this.locForm.city) {
-        this.interaction.updateUserLocation(this.locForm);
-        this.isEditingLoc = false;
+  goBack() {
+    this.router.navigate(['/feed']);
+  }
+
+  goToAdmin() {
+    this.router.navigate(['/admin']);
+  }
+
+  async logout() {
+    if (confirm("Se déconnecter de votre compte ?")) {
+      await this.authService.logout();
+      this.router.navigate(['/auth']);
     }
   }
 
-  togglePref(cat: Category) {
-    this.interaction.toggleUserInterest(cat);
-  }
-
-  logout() {
-    this.router.navigate(['/auth']);
-  }
-
-  openModal(type: any) {
-    this.modal.openModal(type);
-  }
-
-  getTextColor(cat: Category) {
-    return getTextColor(cat);
-  }
-
-  getCategoryColor(cat: Category) {
-    return CATEGORY_COLORS[cat];
-  }
-
-  getIconForCategory(cat: string): string {
-    const mapping: Record<string, string> = {
-      'tech': 'cpu',
-      'politique': 'globe',
-      'economie': 'trending-up',
-      'ecologie': 'leaf',
-      'culture': 'star',
-      'societe': 'users',
-      'sante': 'activity',
-      'divertissement': 'video'
-    };
-    return mapping[cat.toLowerCase()] || 'hash';
+  async deleteAccount() {
+    if (confirm("⚠️ ACTION IRRÉVERSIBLE.\nÊtes-vous sûr de vouloir supprimer définitivement votre compte et tout votre historique ?")) {
+      try {
+         await this.authService.deleteAccount();
+         this.router.navigate(['/auth']);
+      } catch (err: any) {
+         if (err.message && err.message.includes('requires-recent-login')) {
+            alert("Pour des raisons de sécurité, veuillez vous déconnecter, vous reconnecter, puis réessayer de supprimer votre compte.");
+         } else {
+            alert("Une erreur s'est produite lors de la suppression du compte.");
+         }
+      }
+    }
   }
 }
+

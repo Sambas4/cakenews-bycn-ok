@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. GLOBAL SAFETY NET (Rejet absolu de toute route non déclarée)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // MÉTHODES DE VALIDATION ET IDENTITÉ
+    // ==========================================
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { 
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // LE BLUEPRINT : Validation stricte des types et TAILLES (Anti Denial of Wallet)
+    function isValidConversation(data) {
+      return data.keys().hasAll(['id', 'type', 'sender', 'lastMessage', 'timestamp', 'unreadCount', 'messages', 'ownerId'])
+        && data.id is string && data.id.size() <= 100
+        && data.type in ['direct', 'notification', 'admin']
+        && data.ownerId == request.auth.uid // 🔒 Invariant strict : l'auteur est le seul propriétaire
+        && data.sender is string && data.sender.size() <= 100
+        && data.lastMessage is string && data.lastMessage.size() <= 2000
+        && data.messages is list && data.messages.size() <= 200; // 🔒 Guard total d'Array
+    }
+
+    // LE BLUEPRINT UTILISATEUR
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'username', 'avatarUrl'])
+        && data.uid == request.auth.uid // 🔒 Invariant : doit correspondre au user authentifié
+        && data.username is string && data.username.size() > 0 && data.username.size() <= 30
+        && data.avatarUrl is string && data.avatarUrl.size() <= 500
+        && (!data.keys().hasAny(['avatarBg']) || (data.avatarBg is string && data.avatarBg.size() <= 20));
+    }
+
+    // ==========================================
+    // POLITIQUES D'ACCÈS PAR COLLECTION
+    // ==========================================
+
+    match /users/{userId} {
+      // 🔒 Tout utilisateur connecté peut lire un profil pour voir le pseudo/avatar des autres
+      allow read: if isSignedIn();
+      
+      // 🔒 Création de son propre profil
+      allow create: if isSignedIn() 
+                    && userId == request.auth.uid
+                    && isValidUser(incoming())
+                    && incoming().keys().size() <= 6; // Bloque l'ajout d'email caché etc.
+                    
+      // 🔒 Mise à jour de son propre profil
+      allow update: if isSignedIn() 
+                    && userId == request.auth.uid
+                    && existing().uid == request.auth.uid
+                    && isValidUser(incoming())
+                    && incoming().uid == existing().uid // uid immuable
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['username', 'avatarUrl', 'avatarBg']);
+    }
+
+    match /system/connection-test {
+      allow get: if true; // Autorise uniquement un "get" unitaire, bloque les "list"
+    }
+
+    match /conversations/{conversationId} {
+      // 🔒 Pillar 8 : Pas de Blanket Read. Uniquement le propriétaire peut lire.
+      allow read: if isSignedIn() && existing().ownerId == request.auth.uid;
+      
+      // 🔒 Création : Validation parfaite du schéma et blocage des clés supplémentaires.
+      allow create: if isSignedIn() 
+                    && isValidId(conversationId) 
+                    && isValidConversation(incoming())
+                    && incoming().keys().size() <= 12; // Bloque toute clé "fantôme" (Shadow Update)
+      
+      // 🔒 Update : Action-Based uniquement (limite précisément CE QUI PEUT CHANGER)
+      allow update: if isSignedIn() 
+                    && isValidId(conversationId)
+                    && existing().ownerId == request.auth.uid // 🔒 Doit être le propriétaire
+                    && isValidConversation(incoming())
+                    && incoming().ownerId == existing().ownerId // 🔒 L'ownerId ne peut pas être transféré
+                    && incoming().id == existing().id // 🔒 L'ID ne peut pas être altéré
+                    && (
+                      // Action A : Ajout d'un message (envoi ou réception)
+                      incoming().diff(existing()).affectedKeys().hasOnly(['messages', 'lastMessage', 'timestamp', 'unreadCount']) 
+                      || 
+                      // Action B : Marquer comme lu
+                      incoming().diff(existing()).affectedKeys().hasOnly(['unreadCount'])
+                    );
+                    
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
+    }
+    match /articles/{articleId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+  }
+}

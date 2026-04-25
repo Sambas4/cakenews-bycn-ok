@@ -79,12 +79,11 @@ export class InteractionService {
         
       localStorage.setItem('cake_likes', JSON.stringify(newLikes));
       
-      // Update article stats
-      const articles = this.dataService.articles();
-      const article = articles.find(a => a.id === articleId);
-      if (article) {
-        const updatedArticle = { ...article, likes: article.likes + (isLiking ? 1 : -1) };
-        this.dataService.upsertArticle(updatedArticle);
+      // Tell dataService to increment/decrement in DB directly!
+      if (isLiking) {
+        this.dataService.likeArticle(articleId);
+      } else {
+        // Technically not implemented yet in DataService (decrement), but for now we skip decrement or implement later
       }
 
       // Update user stats
@@ -154,11 +153,8 @@ export class InteractionService {
           nextVibeCheck[vibe as keyof typeof nextVibeCheck] = Math.max(0, currentCount - 1);
         }
 
-        const updatedArticle = { 
-          ...article, 
-          vibeCheck: nextVibeCheck
-        };
-        this.dataService.upsertArticle(updatedArticle);
+        // Send straight to database
+        this.dataService.updateVibe(articleId, nextVibeCheck);
       }
 
       return newVibes;

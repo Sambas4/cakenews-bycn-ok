@@ -1,6 +1,8 @@
-import { Injectable, signal } from '@angular/core';
-import { collection, doc, setDoc, updateDoc, onSnapshot, getDocs } from 'firebase/firestore';
+import { Injectable, signal, effect, inject } from '@angular/core';
+import { collection, doc, setDoc, updateDoc, onSnapshot, getDocs, query, where, Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase.service';
+import { AuthService } from './auth.service';
+import { handleFirestoreError } from '../utils/firestore-error-handler';
 
 export type ChatType = 'direct' | 'notification' | 'admin';
 export type MessageStatus = 'sent' | 'delivered' | 'read';
@@ -18,6 +20,7 @@ export interface ChatMessage {
 export interface Conversation {
   id: string;
   type: ChatType;
+  ownerId: string;
   sender: string;
   avatarUrl?: string;
   fallbackInitials: string;
@@ -36,26 +39,40 @@ export interface Conversation {
 export class MessageService {
   conversations = signal<Conversation[]>([]);
   private collectionName = 'conversations';
+  private authService = inject(AuthService);
+  private unsub: Unsubscribe | null = null;
 
   constructor() {
-    this.initFirestoreSync();
+    effect(() => {
+      const user = this.authService.currentUser();
+      if (user) {
+        this.initFirestoreSync(user.uid);
+      } else {
+        if (this.unsub) {
+          this.unsub();
+          this.unsub = null;
+        }
+        this.conversations.set([]);
+      }
+    });
   }
 
-  private async initFirestoreSync() {
-    // 1. Vérification et "Seeding" au premier lancement (si la base Firestore est vide)
+  private async initFirestoreSync(userId: string) {
+    // 1. Vérification et "Seeding" au premier lancement
     try {
-      const snapshot = await getDocs(collection(db, this.collectionName));
+      const q = query(collection(db, this.collectionName), where('ownerId', '==', userId));
+      const snapshot = await getDocs(q);
       if (snapshot.empty) {
-        console.log('📦 [Firestore] Base vide, injection des données initiales sur Google Cloud...');
-        await this.seedDatabase();
+        console.log('📦 [Firestore] Base vide pour cet utilisateur, injection...');
+        await this.seedDatabase(userId);
       }
     } catch (e: any) {
       console.error("Erreur de lecture Firestore initiale:", e.message);
     }
 
-    // 2. Écoute active en TEMPS RÉEL (WebSockets)
-    // Dès qu'un document change dans la collection 'conversations' sur les serveurs, Angular met à jour l'UI instantanément
-    onSnapshot(collection(db, this.collectionName), (querySnapshot) => {
+    // 2. Écoute active en TEMPS RÉEL (WebSockets) restreint au ownerId
+    const q = query(collection(db, this.collectionName), where('ownerId', '==', userId));
+    this.unsub = onSnapshot(q, (querySnapshot) => {
       const data: Conversation[] = [];
       querySnapshot.forEach((docSnap) => {
         data.push(docSnap.data() as Conversation);
@@ -94,7 +111,11 @@ export class MessageService {
     updatedConv.timestamp = newMsg.timestamp;
 
     // Écriture réseau
-    await setDoc(doc(db, this.collectionName, conversationId), updatedConv);
+    try {
+      await setDoc(doc(db, this.collectionName, conversationId), updatedConv);
+    } catch(e: any) {
+      handleFirestoreError(e, 'create', `${this.collectionName}/${conversationId}`);
+    }
     
     // Simulation du bot qui répond via un autre noeud réseau (sur Firestore)
     if (updatedConv.type === 'direct') {
@@ -106,9 +127,13 @@ export class MessageService {
     const current = this.conversations();
     const conv = current.find(c => c.id === conversationId);
     if (conv && conv.unreadCount > 0) {
-      await updateDoc(doc(db, this.collectionName, conversationId), {
-        unreadCount: 0
-      });
+      try {
+        await updateDoc(doc(db, this.collectionName, conversationId), {
+          unreadCount: 0
+        });
+      } catch(e: any) {
+        handleFirestoreError(e, 'update', `${this.collectionName}/${conversationId}`);
+      }
     }
   }
 
@@ -133,13 +158,18 @@ export class MessageService {
     updatedConv.timestamp = newMsg.timestamp;
     updatedConv.unreadCount += 1;
     
-    await setDoc(doc(db, this.collectionName, conversationId), updatedConv);
+    try {
+      await setDoc(doc(db, this.collectionName, conversationId), updatedConv);
+    } catch(e: any) {
+      handleFirestoreError(e, 'create', `${this.collectionName}/${conversationId}`);
+    }
   }
 
-  private async seedDatabase() {
+  private async seedDatabase(userId: string) {
     const mocks: Conversation[] = [
       {
-        id: 'priv-1',
+        id: `${userId}_priv-1`,
+        ownerId: userId,
         type: 'direct',
         sender: 'Dr. Émilie Laurent',
         avatarUrl: 'https://picsum.photos/seed/doc/100/100',
@@ -150,13 +180,14 @@ export class MessageService {
         isOnline: true,
         isVerified: true,
         messages: [
-          { id: 'm1', conversationId: 'priv-1', senderId: 'other', isMe: false, text: 'Salut, je viens d\'obtenir les documents de l\'enquête.', timestamp: '14:15', status: 'read' },
-          { id: 'm2', conversationId: 'priv-1', senderId: 'me', isMe: true, text: 'Parfait. Passe par la messagerie chiffrée, on ne sait jamais.', timestamp: '14:16', status: 'read' },
-          { id: 'm3', conversationId: 'priv-1', senderId: 'other', isMe: false, text: 'Je t\'envoie les documents sources via notre canal chiffré.', timestamp: '14:22', status: 'read' }
+          { id: 'm1', conversationId: `${userId}_priv-1`, senderId: 'other', isMe: false, text: 'Salut, je viens d\'obtenir les documents de l\'enquête.', timestamp: '14:15', status: 'read' },
+          { id: 'm2', conversationId: `${userId}_priv-1`, senderId: 'me', isMe: true, text: 'Parfait. Passe par la messagerie chiffrée, on ne sait jamais.', timestamp: '14:16', status: 'read' },
+          { id: 'm3', conversationId: `${userId}_priv-1`, senderId: 'other', isMe: false, text: 'Je t\'envoie les documents sources via notre canal chiffré.', timestamp: '14:22', status: 'read' }
         ]
       },
       {
-        id: 'notif-smart-1',
+        id: `${userId}_notif-smart-1`,
+        ownerId: userId,
         type: 'notification',
         sender: 'Radar Débats',
         fallbackInitials: 'RD',
@@ -165,12 +196,13 @@ export class MessageService {
         unreadCount: 1,
         isOnline: false,
         messages: [
-          { id: 'm1', conversationId: 'notif-smart-1', senderId: 'system', isMe: false, text: '[ALERTE DÉBAT INTELLIGENT] L\'Auteur "Vision2026" que vous avez contredit génère une quantité inhabituelle de trafic dans votre secteur d\'information. Son intervention compte 523 commentaires.', timestamp: '18:00', status: 'read' },
-          { id: 'm2', conversationId: 'notif-smart-1', senderId: 'system', isMe: false, text: '👉 Vous pouvez retourner au débat depuis l\'article pour maintenir votre influence territoriale.', timestamp: '18:00', status: 'read' }
+          { id: 'm1', conversationId: `${userId}_notif-smart-1`, senderId: 'system', isMe: false, text: '[ALERTE DÉBAT INTELLIGENT] L\'Auteur "Vision2026" que vous avez contredit génère une quantité inhabituelle de trafic dans votre secteur d\'information. Son intervention compte 523 commentaires.', timestamp: '18:00', status: 'read' },
+          { id: 'm2', conversationId: `${userId}_notif-smart-1`, senderId: 'system', isMe: false, text: '👉 Vous pouvez retourner au débat depuis l\'article pour maintenir votre influence territoriale.', timestamp: '18:00', status: 'read' }
         ]
       },
       {
-        id: 'admin-1',
+        id: `${userId}_admin-1`,
+        ownerId: userId,
         type: 'admin',
         sender: 'Administration Centrale',
         fallbackInitials: 'ADM',
@@ -179,13 +211,17 @@ export class MessageService {
         unreadCount: 0,
         isVerified: true,
         messages: [
-          { id: 'm1', conversationId: 'admin-1', senderId: 'system', isMe: false, text: '[MESSAGE AUTOMATIQUE DU SYSTÈME] Remplacement de vos paires de clés asymétriques effectué avec succès. Vos transmissions passées et futures utilisent la cryptographie AES-256.', timestamp: '09:00', status: 'read' }
+          { id: 'm1', conversationId: `${userId}_admin-1`, senderId: 'system', isMe: false, text: '[MESSAGE AUTOMATIQUE DU SYSTÈME] Remplacement de vos paires de clés asymétriques effectué avec succès. Vos transmissions passées et futures utilisent la cryptographie AES-256.', timestamp: '09:00', status: 'read' }
         ]
       }
     ];
 
     for (const chat of mocks) {
-      await setDoc(doc(db, this.collectionName, chat.id), chat);
+      try {
+        await setDoc(doc(db, this.collectionName, chat.id), chat);
+      } catch(e: any) {
+        handleFirestoreError(e, 'create', `${this.collectionName}/${chat.id}`);
+      }
     }
   }
 }

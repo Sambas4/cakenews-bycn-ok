@@ -1,8 +1,8 @@
 export const firebaseConfig = {
-  apiKey: "AIzaSyDQ0FT-Xohl6fHrVX-S_bO9C4jUi4DhLbI",
-  authDomain: "cakenews-app.firebaseapp.com",
-  projectId: "cakenews-app",
-  storageBucket: "cakenews-app.firebasestorage.app",
-  messagingSenderId: "877773241729",
-  appId: "1:877773241729:web:eeba2125c82d387c667c80"
+  apiKey: "AIzaSyAUWEhz-xBQtdjFy1utH23DbFrXXlFgcB8",
+  authDomain: "cakenews-bycn.firebaseapp.com",
+  projectId: "cakenews-bycn",
+  storageBucket: "cakenews-bycn.firebasestorage.app",
+  messagingSenderId: "195992115981",
+  appId: "1:195992115981:web:8b3fb5dfe74ab207cc6e44"
 };

@@ -87,7 +87,7 @@ type ArticleTab = 'dossier' | 'summary' | 'room' | 'reseau';
             </div>
           </div>
 
-          <div class="flex-1 bg-black relative" [ngClass]="activeTab === 'room' ? 'p-0 pb-12' : 'px-6 pt-6 pb-6'">
+          <div class="flex-1 bg-black relative flex flex-col" [ngClass]="activeTab === 'room' ? 'p-0 pb-[80px]' : 'px-6 pt-6 pb-[80px]'">
             @if (activeTab === 'dossier') {
               <app-dossier-module [content]="liveArticle()?.content || []"></app-dossier-module>
             }

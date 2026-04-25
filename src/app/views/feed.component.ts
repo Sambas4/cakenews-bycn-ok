@@ -122,9 +122,15 @@ export class FeedViewComponent implements OnInit, OnDestroy {
   t = this.translation.t;
   Math = Math;
 
-  // L'état du feed (isolé de la réactivité continue pour ne pas recréer le DOM à chaque micro-signal)
-  feedArticles = signal<Article[]>([]);
-  articles = computed(() => this.feedArticles());
+  // L'état du feed (isolé de la réactivité continue brute pour ne pas recréer le DOM à chaque micro-signal)
+  feedArticles = computed(() => {
+    // This allows the feed to automatically reflect new likes/comments from snapshot 
+    // while keeping the order stable based on FeedEngine rules.
+    const allArticles = this.dataService.articles();
+    return this.feedEngine.generateAdaptiveFeed(allArticles);
+  });
+  
+  articles = this.feedArticles;
   
   currentIndex = 0;
   containerWidth = window.innerWidth;
@@ -157,9 +163,6 @@ export class FeedViewComponent implements OnInit, OnDestroy {
   private viewStartTime: number = Date.now();
 
   ngOnInit() {
-    // Génération "Snapshot" du feed au démarrage de la vue
-    this.feedArticles.set(this.feedEngine.generateAdaptiveFeed(this.dataService.articles()));
-
     this.route.paramMap.subscribe(params => {
       const id = params.get('id');
       if (id && this.articles().length > 0) {

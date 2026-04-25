@@ -49,8 +49,8 @@ export class AppComponent implements OnInit {
       filter(event => event instanceof NavigationEnd)
     ).subscribe((event: any) => {
       const url = event.urlAfterRedirects;
-      // Hide bottom nav and ticker on auth and admin pages
-      if (url.startsWith('/auth') || url.startsWith('/admin')) {
+      // Hide bottom nav and ticker on auth, onboarding, and admin pages
+      if (url.startsWith('/auth') || url.startsWith('/admin') || url.startsWith('/onboarding')) {
         this.showBottomNav = false;
         this.showTicker = false;
       } else {
