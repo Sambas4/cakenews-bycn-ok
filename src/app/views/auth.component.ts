@@ -36,6 +36,9 @@ import { AuthService } from '../services/auth.service';
                   <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-6 h-6" alt="Google" />
                   <span>Connexion Google</span>
                 </button>
+                <div class="mt-4 text-xs text-center text-zinc-500 max-w-sm mx-auto">
+                   <p>Note : La connexion Google nécessite d'être configurée dans Supabase (Auth > Providers > Google).</p>
+                </div>
               </div>
           </div>
       </div>
@@ -47,6 +50,7 @@ export class AuthViewComponent {
 
   isLoading = signal<boolean>(false);
   errorMessage = signal<string>('');
+  currentOrigin = window.location.origin;
 
   constructor() {
   }

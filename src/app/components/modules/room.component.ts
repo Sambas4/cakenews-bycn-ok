@@ -212,7 +212,7 @@ export class RoomModuleComponent {
     const newComment: Comment = {
       id: Date.now().toString(),
       author: profile?.username || 'Anonyme',
-      avatar: profile?.avatarUrl || 'https://ui-avatars.com/api/?name=Anonyme&background=random',
+      avatar: profile?.photoURL || 'https://ui-avatars.com/api/?name=Anonyme&background=random',
       time: timeStr,
       content: this.newCommentText.trim(),
       likes: 0

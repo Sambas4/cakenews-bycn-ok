@@ -30,14 +30,14 @@ export const adminGuard: CanActivateFn = async () => {
   }
 
   const profile = userService.currentUserProfile();
-  if (!profile) {
+  if (!profile && !authService.isSuperAdmin() && !authService.isAdmin() && user.email !== 'mademagic3d@gmail.com') {
     return router.parseUrl('/onboarding');
   }
 
-  if (profile.isAdmin) {
+  if (authService.isAdmin() || authService.isSuperAdmin()) {
     return true;
   } else {
-    alert("Accès refusé. Vous n'êtes pas administrateur.");
+    // Dans l'iframe, alert() bloque l'UI. On redirige silencieusement.
     return router.parseUrl('/feed');
   }
 };

@@ -8,11 +8,13 @@ import {
   ElementRef,
   signal,
   computed,
+  OnInit,
+  OnDestroy,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { Router } from "@angular/router";
 import { LucideAngularModule } from "lucide-angular";
-import { AdminTab, Article } from "../../types";
+import { AdminTab, Article, UserProfile } from "../../types";
 import { TranslationService } from "../../services/translation.service";
 import { ArticleCardComponent } from "../article-card.component";
 import { AdminDashboardComponent } from "./admin-dashboard.component";
@@ -22,6 +24,9 @@ import { AdminAuditComponent } from "./admin-audit.component";
 import { AdminAntenneComponent } from "./admin-antenne.component";
 import { AdminLocalisationComponent } from "./admin-localisation.component";
 import { DataService } from "../../services/data.service";
+import { AuthService } from "../../services/auth.service";
+import { SupabaseService } from "../../services/supabase.service";
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 @Component({
   selector: "app-admin-view",
@@ -171,6 +176,7 @@ import { DataService } from "../../services/data.service";
           @case (AdminTab.RESEAU) {
             <app-admin-dashboard
               [articles]="articles()"
+              [users]="users()"
               (editArticle)="handleEditArticle($event)"
               (deleteArticle)="handleDeleteArticle($event)"
             ></app-admin-dashboard>
@@ -233,12 +239,39 @@ import { DataService } from "../../services/data.service";
     </div>
   `,
 })
-export class AdminViewComponent {
+export class AdminViewComponent implements OnInit, OnDestroy {
   private dataService = inject(DataService);
   articles = this.dataService.articles;
+  users = signal<UserProfile[]>([]);
+  private channelUsers: RealtimeChannel | null = null;
   private router = inject(Router);
+  private authService = inject(AuthService);
+  private supabaseService = inject(SupabaseService);
 
-  handleLogout() {
+  async ngOnInit() {
+      try {
+          const { data, error } = await this.supabaseService.client.from('users').select('*');
+          if (!error && data) {
+              this.users.set(data as UserProfile[]);
+          }
+      } catch (e) {
+          console.warn('Failed initial fetch of users', e);
+      }
+
+      this.channelUsers = this.supabaseService.client.channel('public:users')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, async () => {
+              const { data } = await this.supabaseService.client.from('users').select('*');
+              if (data) this.users.set(data as UserProfile[]);
+          })
+          .subscribe();
+  }
+
+  ngOnDestroy() {
+     if (this.channelUsers) this.supabaseService.client.removeChannel(this.channelUsers);
+  }
+
+  async handleLogout() {
+    await this.authService.logout();
     this.router.navigate(["/auth"]);
   }
 

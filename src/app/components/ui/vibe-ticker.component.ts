@@ -81,8 +81,7 @@ interface TickerGroup {
                         </div>
                     } @else {
                         <span 
-                            class="text-[10px] md:text-[12px] font-black uppercase tracking-tight group-hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 md:gap-2" 
-                            (click)="openTrophy(item, group)"
+                            class="text-[10px] md:text-[12px] font-black uppercase tracking-tight text-white flex items-center gap-1.5 md:gap-2" 
                         >
                             @if (showRank(group)) {
                                 <span class="text-[8px] md:text-[9px] text-white/40">#{{item.rank}}</span>
@@ -218,16 +217,5 @@ export class VibeTickerComponent {
   showRank(group: TickerGroup) {
     const config = this.broadcast.config();
     return config.rankingMode === 'MANUAL' || (config.rankingMode === 'HYBRID' && group.label === "⭐ À LA UNE");
-  }
-
-  openTrophy(item: TickerItem, group: TickerGroup) {
-    this.modal.openModal('TROPHY', { 
-        data: {
-            ...item, 
-            label: item.category || 'Points', 
-            color: item.color || group.color, 
-            avatar: item.avatar || `https://i.pravatar.cc/150?u=${item.name}`
-        } 
-    });
   }
 }

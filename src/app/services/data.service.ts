@@ -1,19 +1,20 @@
 import { Injectable, signal, effect, inject } from '@angular/core';
-import { MOCK_ARTICLES, MOCK_USERS } from '../data/mockData';
-import { Article, UserData, Comment as CakeComment } from '../types';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, increment, updateDoc, arrayUnion } from 'firebase/firestore';
-import { db } from './firebase.service';
-import { handleFirestoreError } from '../utils/firestore-error-handler';
+import { Article, Comment as CakeComment } from '../types';
+import { SupabaseService } from './supabase.service';
 import { AuthService } from './auth.service';
+import { UserService } from './user.service';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 @Injectable({
   providedIn: 'root'
 })
 export class DataService {
   articles = signal<Article[]>([]);
-  private unsubscribeArticles: (() => void) | null = null;
+  private channel: RealtimeChannel | null = null;
   public isConnected = signal<boolean>(true); // To manually track if DB connected
   private authService = inject(AuthService);
+  private userService = inject(UserService);
+  private supabaseService = inject(SupabaseService);
 
   constructor() {
     effect(() => {
@@ -21,63 +22,45 @@ export class DataService {
       if (user) {
         this.startRealtimeSync();
       } else {
-        if (this.unsubscribeArticles) {
-          this.unsubscribeArticles();
-          this.unsubscribeArticles = null;
+        if (this.channel) {
+          this.supabaseService.client.removeChannel(this.channel);
+          this.channel = null;
         }
         this.articles.set([]);
       }
     });
   }
 
-  private startRealtimeSync() {
-    if (this.unsubscribeArticles) {
-      this.unsubscribeArticles();
+  private async startRealtimeSync() {
+    if (this.channel) {
+      await this.supabaseService.client.removeChannel(this.channel);
     }
-    
-    const articlesCol = collection(db, 'articles');
-    
-    // onSnapshot sets up a continuous websocket connection to listen for updates in real time
-    this.unsubscribeArticles = onSnapshot(articlesCol, 
-      (snapshot) => {
-        this.isConnected.set(true);
-        const articleList = snapshot.docs.map(doc => doc.data() as Article);
-        
-        // Sort articles by timestamp before pushing to app view (newest first)
-        const sorted = articleList.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        
-        // Set up fallback for hydration mock data:
-        if (sorted.length > 0) {
-          this.articles.set(sorted);
-          this.saveToStorage(sorted);
-        } else {
-          // If empty in DB (e.g. brand new project), hydrate with mock data once:
-          this.articles.set(MOCK_ARTICLES);
-          // Allow hydration specifically if admin or in test mode, but don't crash the UI if it fails
-          Promise.allSettled(MOCK_ARTICLES.map(art => this.upsertArticle(art))).then(results => {
-              const failures = results.filter(r => r.status === 'rejected');
-              if (failures.length > 0) {
-                  console.warn("Hydration partially or totally failed due to permissions, falling back to local memory articles.", failures);
-              }
-          });
-        }
-      },
-      (error) => {
-        console.error("Firebase Snapshot Error (Offline?):", error);
-        this.isConnected.set(false);
-        // Fallback offline mode reading from local storage
-        const stored = localStorage.getItem('cakenews_articles');
-        if (stored) {
-          try {
-            this.articles.set(JSON.parse(stored));
-          } catch(e) {}
-        }
-      }
-    );
-  }
 
-  private saveToStorage(data: Article[]) {
-    localStorage.setItem('cakenews_articles', JSON.stringify(data));
+    try {
+      // First fetch
+      const { data, error } = await this.supabaseService.client.from('articles').select('*').order('timestamp', { ascending: false });
+      if (error) throw error;
+      
+      this.articles.set((data as Article[]) || []);
+      this.isConnected.set(true);
+
+      // Listen to changes
+      this.channel = this.supabaseService.client.channel('public:articles')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'articles' }, (payload) => {
+           // Handle insert, update, delete
+           if (payload.eventType === 'INSERT') {
+             this.articles.update(curr => [payload.new as Article, ...curr].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+           } else if (payload.eventType === 'UPDATE') {
+             this.articles.update(curr => curr.map(a => a.id === payload.new['id'] ? payload.new as Article : a).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+           } else if (payload.eventType === 'DELETE') {
+             this.articles.update(curr => curr.filter(a => a.id !== payload.old['id']));
+           }
+        })
+        .subscribe();
+    } catch(e) {
+      console.error("Supabase Error starting sync:", e);
+      this.isConnected.set(false);
+    }
   }
 
   async getArticles(): Promise<Article[]> {
@@ -86,22 +69,20 @@ export class DataService {
 
   async upsertArticle(article: Article): Promise<Article | null> {
     try {
-      const docRef = doc(db, 'articles', article.id);
-      await setDoc(docRef, article);
-      // Wait for the onSnapshot listener to update the state...
-      return article;
+      const { data, error } = await this.supabaseService.client.from('articles').upsert(article).select().single();
+      if (error) throw error;
+      return data as Article;
     } catch(e: any) {
-       handleFirestoreError(e, 'create', `articles/${article.id}`);
+       console.error("Supabase create error", e);
        return null;
     }
   }
 
   async deleteArticle(articleId: string): Promise<void> {
     try {
-      const docRef = doc(db, 'articles', articleId);
-      await deleteDoc(docRef);
-    } catch(e) {
-      console.error("Error deleting article:", e);
+      await this.supabaseService.client.from('articles').delete().eq('id', articleId);
+    } catch(e: any) {
+      console.error("Supabase delete error", e);
     }
   }
 
@@ -109,40 +90,54 @@ export class DataService {
 
   async likeArticle(articleId: string) {
     try {
-      const docRef = doc(db, 'articles', articleId);
-      await updateDoc(docRef, {
-        likes: increment(1)
-      });
+      const { data, error } = await this.supabaseService.client.from('articles').select('likes').eq('id', articleId).single();
+      if (error) throw error;
+      await this.supabaseService.client.from('articles').update({ likes: (data.likes || 0) + 1 }).eq('id', articleId);
     } catch(e: any) {
-      handleFirestoreError(e, 'update', `articles/${articleId}`);
+      console.error("Supabase update error", e);
     }
   }
 
   async updateVibe(articleId: string, currentVibeCheck: any) {
     try {
-      const docRef = doc(db, 'articles', articleId);
-      await updateDoc(docRef, {
-        vibeCheck: currentVibeCheck
-      });
+      await this.supabaseService.client.from('articles').update({ vibeCheck: currentVibeCheck }).eq('id', articleId);
     } catch(e: any) {
-      handleFirestoreError(e, 'update', `articles/${articleId}`);
+      console.error("Supabase vibe error", e);
     }
   }
 
   async addComment(articleId: string, comment: CakeComment) {
     try {
-      const docRef = doc(db, 'articles', articleId);
-      await updateDoc(docRef, {
-        comments: increment(1),
-        roomComments: arrayUnion(comment) // Push comment to the end of the array
-      });
+      const { data: art, error } = await this.supabaseService.client.from('articles').select('comments, roomComments').eq('id', articleId).single();
+      if (error) throw error;
+      
+      const newCommentsCount = (art.comments || 0) + 1;
+      const newRoomComments = [...(art.roomComments || []), comment];
+
+      await this.supabaseService.client.from('articles').update({
+        comments: newCommentsCount,
+        roomComments: newRoomComments
+      }).eq('id', articleId);
     } catch(e: any) {
-      handleFirestoreError(e, 'update', `articles/${articleId}`);
+      console.error("Supabase comment error", e);
     }
   }
 
-  async getUserProfile(userId: string): Promise<UserData | null> {
-    return MOCK_USERS.find(u => u.id === userId) || null;
+  async getUserProfile(userId: string): Promise<any | null> {
+    // Rely strictly on public publicProfiles if not the user themselves
+    const publicProfile = await this.userService.fetchPublicProfile(userId);
+    if (publicProfile) {
+        return {
+           id: publicProfile.uid,
+           name: publicProfile.displayName,
+           handle: publicProfile.username || 'user',
+           avatar: publicProfile.photoURL || 'https://api.dicebear.com/7.x/notionists/svg?seed=' + publicProfile.displayName,
+           role: 'USER', // We don't expose role in public profile for security
+           status: 'ACTIVE',
+           joinDate: publicProfile.updatedAt || new Date().toISOString()
+        };
+    }
+    return null;
   }
 }
 

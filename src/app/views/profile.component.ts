@@ -5,7 +5,10 @@ import { LucideAngularModule } from 'lucide-angular';
 import { InteractionService } from '../services/interaction.service';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../services/user.service';
+import { TranslationService } from '../services/translation.service';
 import { Router } from '@angular/router';
+import { THEME_GROUPS, CATEGORY_COLORS } from '../constants';
+import type { Category as AppCategory } from '../types';
 
 type ProfileTab = 'activity' | 'settings';
 
@@ -93,28 +96,6 @@ type ProfileTab = 'activity' | 'settings';
                     </div>
                     <span class="text-[10px] font-bold text-zinc-500 bg-zinc-900 px-2 py-1 rounded-md">{{savedArticles().length}}</span>
                   </button>
-
-                  <button class="w-full bg-zinc-900/40 border border-zinc-800 rounded-[20px] p-4 flex items-center justify-between hover:bg-zinc-800 transition-colors group">
-                    <div class="flex items-center gap-3">
-                      <div class="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
-                         <lucide-icon name="history" class="w-3 h-3 text-white/50 group-hover:text-white transition-colors"></lucide-icon>
-                      </div>
-                      <span class="text-xs font-[1000] uppercase tracking-wider text-white">Historique Récent</span>
-                    </div>
-                    <lucide-icon name="chevron-right" class="w-4 h-4 text-zinc-600"></lucide-icon>
-                  </button>
-                  
-                  <button class="w-full bg-[#7ae25c]/10 border border-[#7ae25c]/20 rounded-[20px] p-4 flex items-center justify-between hover:bg-[#7ae25c]/20 transition-colors mt-2 group relative overflow-hidden">
-                    <div class="flex items-center gap-3 relative z-10">
-                      <div class="w-8 h-8 rounded-full bg-[#7ae25c] flex items-center justify-center">
-                         <lucide-icon name="sparkles" class="w-4 h-4 text-black"></lucide-icon>
-                      </div>
-                      <div class="flex flex-col items-start gap-1">
-                        <span class="text-xs font-[1000] uppercase tracking-wider text-[#7ae25c]">Tu as manqué ça aujourd'hui</span>
-                        <span class="text-[9px] font-black uppercase tracking-[0.1em] text-[#7ae25c]/60 group-hover:text-[#7ae25c] transition-colors">👉 Continuer la lecture</span>
-                      </div>
-                    </div>
-                  </button>
                </div>
             </div>
           </div>
@@ -122,46 +103,99 @@ type ProfileTab = 'activity' | 'settings';
 
         <!-- === SETTINGS TAB === -->
         @if (activeTab() === 'settings') {
-          <!-- Important: h-full so that the flex container stretches entirely, pushing danger zone to the bottom -->
           <div class="min-h-full flex flex-col justify-between animate-in fade-in slide-in-from-bottom-2 duration-300">
             
-            <div class="space-y-2">
-               <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">Configuration</h3>
-               
-               <div class="bg-zinc-900/40 border border-zinc-800 rounded-[20px] overflow-hidden flex flex-col">
-                  <div class="flex items-center justify-between p-5 border-b border-zinc-800">
-                     <div class="flex items-center gap-3">
-                        <lucide-icon name="languages" class="w-4 h-4 text-zinc-400"></lucide-icon>
-                        <span class="text-xs font-[1000] uppercase tracking-wider text-white">Langue</span>
-                     </div>
-                     <span class="text-[9px] font-black uppercase tracking-widest text-[#7ae25c] bg-[#7ae25c]/10 px-2 py-1 rounded">Français</span>
-                  </div>
-                  
-                  <div class="flex items-center justify-between p-5">
-                     <div class="flex items-center gap-3">
-                        <lucide-icon name="monitor" class="w-4 h-4 text-zinc-400"></lucide-icon>
-                        <span class="text-xs font-[1000] uppercase tracking-wider text-white">Mode Sombre</span>
-                     </div>
-                     <div class="w-8 h-4 bg-[#7ae25c] rounded-full relative opacity-50 cursor-not-allowed">
-                        <div class="absolute right-0.5 top-0.5 w-3 h-3 bg-black rounded-full"></div>
-                     </div>
-                  </div>
+            <div class="space-y-6">
+               <div>
+                 <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">Configuration</h3>
+                 <div class="bg-zinc-900/40 border border-zinc-800 rounded-[20px] overflow-hidden flex flex-col">
+                    <div class="flex items-center justify-between p-5 border-b border-zinc-800">
+                       <div class="flex items-center gap-3">
+                          <lucide-icon name="languages" class="w-4 h-4 text-zinc-400"></lucide-icon>
+                          <span class="text-xs font-[1000] uppercase tracking-wider text-white">Langue</span>
+                       </div>
+                       <span class="text-[9px] font-black uppercase tracking-widest text-[#7ae25c] bg-[#7ae25c]/10 px-2 py-1 rounded">Français</span>
+                    </div>
+                    
+                    <div class="flex items-center justify-between p-5">
+                       <div class="flex items-center gap-3">
+                          <lucide-icon name="monitor" class="w-4 h-4 text-zinc-400"></lucide-icon>
+                          <span class="text-xs font-[1000] uppercase tracking-wider text-white">Mode Sombre</span>
+                       </div>
+                       <div class="w-8 h-4 bg-[#7ae25c] rounded-full relative opacity-50 cursor-not-allowed">
+                          <div class="absolute right-0.5 top-0.5 w-3 h-3 bg-black rounded-full"></div>
+                       </div>
+                    </div>
+                 </div>
+               </div>
+
+               <div>
+                 <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">Personnaliser votre Algorithme</h3>
+                 <div class="space-y-6 bg-zinc-900/40 border border-zinc-800 rounded-[20px] p-5">
+                   @for (group of themeGroups; track group.key) {
+                     @if (group.key !== 'SENSITIVE') {
+                       <div>
+                         <div class="flex items-center gap-2 mb-4 text-zinc-400">
+                             <lucide-icon [name]="group.icon" class="w-4 h-4"></lucide-icon>
+                             <span class="text-[10px] font-black uppercase tracking-[0.2em]">{{t()('GROUP_' + group.key, group.label)}}</span>
+                         </div>
+                         <div class="grid grid-cols-2 gap-2">
+                            @for (cat of group.categories; track cat) {
+                              <button
+                                (click)="toggleUserInterest(cat)"
+                                class="h-10 px-3 font-[1000] uppercase text-[9px] border transition-all flex items-center justify-between rounded-lg active:scale-[0.98] duration-75 touch-manipulation cursor-pointer"
+                                [ngClass]="isInterested(cat) ? 'bg-white text-black border-transparent shadow-lg scale-[1.02]' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700'"
+                              >
+                                <span class="truncate mr-2">{{t()('CAT_' + cat, cat)}}</span>
+                                <div class="w-2 h-2 rounded-full flex-shrink-0" [ngClass]="isInterested(cat) ? 'bg-black' : 'bg-zinc-700'" [style.backgroundColor]="isInterested(cat) ? getCategoryColor(cat) : undefined"></div>
+                              </button>
+                            }
+                         </div>
+                       </div>
+                     }
+                   }
+                 </div>
                </div>
             </div>
 
             <!-- DANGER ZONE (Pushed to bottom) -->
-            <div class="pt-8 flex flex-col gap-2 pb-6 mt-12 mb-safe">
-               <button (click)="logout()" class="w-full bg-zinc-900 border border-zinc-800 text-zinc-400 font-[1000] uppercase tracking-widest text-[10px] py-4 rounded-[16px] flex items-center justify-center gap-2 hover:bg-zinc-800 hover:text-white transition-colors">
-                  <lucide-icon name="log-out" class="w-3 h-3"></lucide-icon> Se déconnecter
-               </button>
-
-               <button (click)="deleteAccount()" class="w-full bg-zinc-950 border border-red-900/30 text-red-500/50 font-black uppercase tracking-widest text-[10px] py-4 rounded-[16px] flex items-center justify-center gap-2 hover:bg-black/40 hover:text-red-500 hover:border-red-500/50 transition-colors">
-                  <lucide-icon name="trash-2" class="w-3 h-3"></lucide-icon> Supprimer mon compte
-               </button>
+            <div class="pt-8 flex flex-col gap-2 pb-6 mt-12 mb-safe relative">
                
-               <p class="text-center mt-2 text-[9px] font-bold text-zinc-700 uppercase tracking-widest">
-                Action irréversible. Toutes vos données seront effacées.
-               </p>
+               @if(showLogoutConfirm()) {
+                  <div class="bg-zinc-900 border border-zinc-800 rounded-[16px] p-4 text-center z-10 mb-2">
+                     <p class="text-white text-xs font-bold mb-3">Se déconnecter ?</p>
+                     <div class="flex gap-2">
+                        <button (click)="showLogoutConfirm.set(false)" class="flex-1 py-2 rounded-lg bg-zinc-800 text-white text-xs font-bold hover:bg-zinc-700">Annuler</button>
+                        <button (click)="performLogout()" class="flex-1 py-2 rounded-lg bg-red-500/20 text-red-500 text-xs font-bold hover:bg-red-500/30">Oui</button>
+                     </div>
+                  </div>
+               } @else if(showDeleteConfirm()) {
+                  <div class="bg-zinc-900 border border-red-900/50 rounded-[16px] p-4 text-center z-10 mb-2">
+                     <p class="text-white text-xs font-bold mb-1">Supprimer le compte</p>
+                     <p class="text-zinc-400 text-[10px] mb-3 leading-tight">Cette action est définitive et effacera toutes vos données.</p>
+                     
+                     @if(deleteError()) {
+                        <p class="text-red-400 text-[10px] mb-3 bg-red-500/10 p-2 rounded">{{ deleteError() }}</p>
+                     }
+                     
+                     <div class="flex gap-2">
+                        <button (click)="showDeleteConfirm.set(false); deleteError.set('')" class="flex-1 py-2 rounded-lg bg-zinc-800 text-white text-[10px] font-bold hover:bg-zinc-700">Annuler</button>
+                        <button (click)="performDeleteAccount()" class="flex-1 py-2 rounded-lg bg-red-600 text-white text-[10px] font-bold hover:bg-red-700">Confirmer</button>
+                     </div>
+                  </div>
+               } @else {
+                  <button (click)="showLogoutConfirm.set(true)" class="w-full bg-zinc-900 border border-zinc-800 text-zinc-400 font-[1000] uppercase tracking-widest text-[10px] py-4 rounded-[16px] flex items-center justify-center gap-2 hover:bg-zinc-800 hover:text-white transition-colors">
+                     <lucide-icon name="log-out" class="w-3 h-3"></lucide-icon> Se déconnecter
+                  </button>
+
+                  <button (click)="showDeleteConfirm.set(true)" class="w-full bg-zinc-950 border border-red-900/30 text-red-500/50 font-black uppercase tracking-widest text-[10px] py-4 rounded-[16px] flex items-center justify-center gap-2 hover:bg-black/40 hover:text-red-500 hover:border-red-500/50 transition-colors">
+                     <lucide-icon name="trash-2" class="w-3 h-3"></lucide-icon> Supprimer mon compte
+                  </button>
+                  
+                  <p class="text-center mt-2 text-[9px] font-bold text-zinc-700 uppercase tracking-widest">
+                   Action irréversible. Toutes vos données seront effacées.
+                  </p>
+               }
             </div>
           </div>
         }
@@ -182,6 +216,9 @@ export class ProfileViewComponent implements OnInit {
   sessionHistory = this.interaction.sessionHistory;
 
   activeTab = signal<ProfileTab>('activity');
+  showLogoutConfirm = signal(false);
+  showDeleteConfirm = signal(false);
+  deleteError = signal('');
 
   adnStats = computed(() => {
     const history = this.sessionHistory();
@@ -221,6 +258,30 @@ export class ProfileViewComponent implements OnInit {
     };
   });
 
+  private translation = inject(TranslationService);
+  t = this.translation.t;
+
+  themeGroups = Object.entries(THEME_GROUPS).map(([key, categories]) => {
+    let icon = 'target';
+    if (key === 'ACTUALITES') icon = 'monitor';
+    if (key === 'FUTUR') icon = 'zap';
+    if (key === 'LIFESTYLE') icon = 'heart';
+    if (key === 'ADRENALINE') icon = 'flame';
+    return { key, label: key, icon, categories };
+  });
+
+  isInterested(cat: string) {
+    return this.interaction.userInterests().includes(cat as AppCategory);
+  }
+
+  toggleUserInterest(cat: string) {
+    this.interaction.toggleUserInterest(cat as AppCategory);
+  }
+
+  getCategoryColor(cat: string) {
+    return CATEGORY_COLORS[cat as AppCategory];
+  }
+
   ngOnInit() {
   }
 
@@ -232,25 +293,22 @@ export class ProfileViewComponent implements OnInit {
     this.router.navigate(['/admin']);
   }
 
-  async logout() {
-    if (confirm("Se déconnecter de votre compte ?")) {
-      await this.authService.logout();
-      this.router.navigate(['/auth']);
-    }
+  async performLogout() {
+    await this.authService.logout();
+    this.router.navigate(['/auth']);
   }
 
-  async deleteAccount() {
-    if (confirm("⚠️ ACTION IRRÉVERSIBLE.\nÊtes-vous sûr de vouloir supprimer définitivement votre compte et tout votre historique ?")) {
-      try {
-         await this.authService.deleteAccount();
-         this.router.navigate(['/auth']);
-      } catch (err: any) {
-         if (err.message && err.message.includes('requires-recent-login')) {
-            alert("Pour des raisons de sécurité, veuillez vous déconnecter, vous reconnecter, puis réessayer de supprimer votre compte.");
-         } else {
-            alert("Une erreur s'est produite lors de la suppression du compte.");
-         }
-      }
+  async performDeleteAccount() {
+    this.deleteError.set('');
+    try {
+        await this.authService.deleteAccount();
+        this.router.navigate(['/auth']);
+    } catch (err: any) {
+        if (err.message && err.message.includes('requires-recent-login')) {
+            this.deleteError.set("Veuillez vous déconnecter et vous reconnecter pour supprimer votre compte (sécurité).");
+        } else {
+            this.deleteError.set("Une erreur s'est produite lors de la suppression.");
+        }
     }
   }
 }

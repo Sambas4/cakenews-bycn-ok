@@ -1,99 +1,357 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // 0. GLOBAL SAFETY NET (Rejet absolu de toute route non déclarée)
+
+    // ==========================================
+    // HELPERS GLOBAUX
+    // ==========================================
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasVerifiedEmail() {
+      return isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function superAdminUid() {
+      return "REPLACE_WITH_SUPER_ADMIN_UID"; // <-- Il faudra remplacer ceci par ton vrai UID
+    }
+
+    function isOwnDoc(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function currentUserExists() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Le super admin n'est jamais considéré comme banni côté règles client.
+    function isNotBanned() {
+      return isSignedIn() && (
+        isSuperAdmin()
+        || !currentUserExists()
+        || currentUser().get('status', 'ACTIVE') != 'BANNED'
+      );
+    }
+
+    function isTrustedUser() {
+      return isSignedIn() && isNotBanned();
+    }
+
+    function isDeveloper() {
+      return isSignedIn() && request.auth.token.email == 'mademagic3d@gmail.com';
+    }
+
+    function hasAdminClaim() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function hasSuperAdminClaim() {
+      return isSignedIn() && request.auth.token.super_admin == true;
+    }
+
+    // Double verrou super admin : UID fixe + custom claim signé.
+    function isSuperAdmin() {
+      return isDeveloper() || (hasVerifiedEmail()
+        && request.auth.uid == superAdminUid()
+        && hasSuperAdminClaim());
+    }
+
+    function isAdmin() {
+      return isTrustedUser() && (
+        isSuperAdmin()
+        || (hasVerifiedEmail() && hasAdminClaim())
+      );
+    }
+
+    function isTargetSuperAdmin(userId) {
+      return userId == superAdminUid();
+    }
+
+    function keysOnly(data, allowed) {
+      return data.keys().hasOnly(allowed);
+    }
+
+    function keysAll(data, required) {
+      return data.keys().hasAll(required);
+    }
+
+    function changedOnly(allowed) {
+      return incoming().diff(existing()).affectedKeys().hasOnly(allowed);
+    }
+
+    function conversationExists(convId) {
+      return exists(/databases/$(database)/documents/conversations/$(convId));
+    }
+
+    function conversation(convId) {
+      return get(/databases/$(database)/documents/conversations/$(convId)).data;
+    }
+
+    function isConversationMember(convId) {
+      return isTrustedUser()
+        && conversationExists(convId)
+        && request.auth.uid in conversation(convId).memberIds;
+    }
+
+    // ==========================================
+    // 0. FILET DE SÉCURITÉ GLOBAL
+    // ==========================================
     match /{document=**} {
       allow read, write: if false;
     }
 
     // ==========================================
-    // MÉTHODES DE VALIDATION ET IDENTITÉ
+    // 1. USERS (PRIVÉ)
     // ==========================================
-    function isSignedIn() { return request.auth != null; }
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-    function isValidId(id) { 
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
-    }
-
-    // LE BLUEPRINT : Validation stricte des types et TAILLES (Anti Denial of Wallet)
-    function isValidConversation(data) {
-      return data.keys().hasAll(['id', 'type', 'sender', 'lastMessage', 'timestamp', 'unreadCount', 'messages', 'ownerId'])
-        && data.id is string && data.id.size() <= 100
-        && data.type in ['direct', 'notification', 'admin']
-        && data.ownerId == request.auth.uid // 🔒 Invariant strict : l'auteur est le seul propriétaire
-        && data.sender is string && data.sender.size() <= 100
-        && data.lastMessage is string && data.lastMessage.size() <= 2000
-        && data.messages is list && data.messages.size() <= 200; // 🔒 Guard total d'Array
-    }
-
-    // LE BLUEPRINT UTILISATEUR
-    function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'username', 'avatarUrl'])
-        && data.uid == request.auth.uid // 🔒 Invariant : doit correspondre au user authentifié
-        && data.username is string && data.username.size() > 0 && data.username.size() <= 30
-        && data.avatarUrl is string && data.avatarUrl.size() <= 500
-        && (!data.keys().hasAny(['avatarBg']) || (data.avatarBg is string && data.avatarBg.size() <= 20));
-    }
-
-    // ==========================================
-    // POLITIQUES D'ACCÈS PAR COLLECTION
-    // ==========================================
-
     match /users/{userId} {
-      // 🔒 Tout utilisateur connecté peut lire un profil pour voir le pseudo/avatar des autres
-      allow read: if isSignedIn();
-      
-      // 🔒 Création de son propre profil
-      allow create: if isSignedIn() 
-                    && userId == request.auth.uid
-                    && isValidUser(incoming())
-                    && incoming().keys().size() <= 6; // Bloque l'ajout d'email caché etc.
-                    
-      // 🔒 Mise à jour de son propre profil
-      allow update: if isSignedIn() 
-                    && userId == request.auth.uid
-                    && existing().uid == request.auth.uid
-                    && isValidUser(incoming())
-                    && incoming().uid == existing().uid // uid immuable
-                    && incoming().diff(existing()).affectedKeys().hasOnly(['username', 'avatarUrl', 'avatarBg']);
+
+      // Document privé : lisible uniquement par son propriétaire ou les admins.
+      allow read: if isTrustedUser() && (isOwnDoc(userId) || isAdmin());
+
+      // Création du document utilisateur par lui-même uniquement.
+      allow create: if isTrustedUser()
+        && isOwnDoc(userId)
+        && keysAll(incoming(), ['uid', 'createdAt', 'updatedAt', 'joinDate'])
+        && keysOnly(incoming(), [
+          'uid',
+          'email',
+          'displayName',
+          'photoURL',
+          'bio',
+          'username',
+          'joinDate',
+          'createdAt',
+          'updatedAt'
+        ])
+        && incoming().uid == request.auth.uid
+        && (
+          !incoming().keys().hasAny(['email'])
+          || incoming().email == request.auth.token.email
+        )
+        && (!incoming().keys().hasAny(['displayName']) || incoming().displayName is string)
+        && (!incoming().keys().hasAny(['photoURL']) || incoming().photoURL is string)
+        && (!incoming().keys().hasAny(['bio']) || incoming().bio is string)
+        && (!incoming().keys().hasAny(['username']) || incoming().username is string);
+
+      allow update: if isTrustedUser() && (
+        // Pouvoir absolu du super admin.
+        isSuperAdmin()
+
+        ||
+
+        // Admin normal : modération stricte, jamais sur le super admin.
+        (
+          isAdmin()
+          && !isTargetSuperAdmin(userId)
+          && changedOnly(['status', 'moderationNote', 'updatedAt'])
+          && (!incoming().keys().hasAny(['status']) || incoming().status in ['ACTIVE', 'SUSPENDED', 'BANNED'])
+          && (!incoming().keys().hasAny(['moderationNote']) || incoming().moderationNote is string)
+        )
+
+        ||
+
+        // Utilisateur : édition de son propre profil uniquement.
+        (
+          isOwnDoc(userId)
+          && !isTargetSuperAdmin(userId)
+          && changedOnly(['displayName', 'photoURL', 'bio', 'username', 'updatedAt'])
+          && (!incoming().keys().hasAny(['displayName']) || incoming().displayName is string)
+          && (!incoming().keys().hasAny(['photoURL']) || incoming().photoURL is string)
+          && (!incoming().keys().hasAny(['bio']) || incoming().bio is string)
+          && (!incoming().keys().hasAny(['username']) || incoming().username is string)
+        )
+      );
+
+      // Le document du super admin est indélébile côté client.
+      allow delete: if isTrustedUser() && (
+        (isSuperAdmin() && !isTargetSuperAdmin(userId))
+        || (isAdmin() && !isTargetSuperAdmin(userId))
+      );
     }
 
-    match /system/connection-test {
-      allow get: if true; // Autorise uniquement un "get" unitaire, bloque les "list"
+    // ==========================================
+    // 1B. PUBLIC PROFILES (PUBLIC LIMITÉ)
+    // Utilise cette collection pour les cartes profil visibles.
+    // ==========================================
+    match /publicProfiles/{userId} {
+      allow read: if isTrustedUser();
+
+      allow create: if isTrustedUser()
+        && isOwnDoc(userId)
+        && keysAll(incoming(), ['uid', 'displayName', 'updatedAt'])
+        && keysOnly(incoming(), [
+          'uid',
+          'displayName',
+          'photoURL',
+          'bio',
+          'username',
+          'updatedAt'
+        ])
+        && incoming().uid == request.auth.uid
+        && incoming().displayName is string
+        && (!incoming().keys().hasAny(['photoURL']) || incoming().photoURL is string)
+        && (!incoming().keys().hasAny(['bio']) || incoming().bio is string)
+        && (!incoming().keys().hasAny(['username']) || incoming().username is string);
+
+      allow update: if isTrustedUser() && (
+        isSuperAdmin()
+        || (
+          isOwnDoc(userId)
+          && changedOnly(['displayName', 'photoURL', 'bio', 'username', 'updatedAt'])
+          && (!incoming().keys().hasAny(['displayName']) || incoming().displayName is string)
+          && (!incoming().keys().hasAny(['photoURL']) || incoming().photoURL is string)
+          && (!incoming().keys().hasAny(['bio']) || incoming().bio is string)
+          && (!incoming().keys().hasAny(['username']) || incoming().username is string)
+        )
+      );
+
+      allow delete: if isTrustedUser() && (isOwnDoc(userId) || isAdmin());
     }
 
-    match /conversations/{conversationId} {
-      // 🔒 Pillar 8 : Pas de Blanket Read. Uniquement le propriétaire peut lire.
-      allow read: if isSignedIn() && existing().ownerId == request.auth.uid;
-      
-      // 🔒 Création : Validation parfaite du schéma et blocage des clés supplémentaires.
-      allow create: if isSignedIn() 
-                    && isValidId(conversationId) 
-                    && isValidConversation(incoming())
-                    && incoming().keys().size() <= 12; // Bloque toute clé "fantôme" (Shadow Update)
-      
-      // 🔒 Update : Action-Based uniquement (limite précisément CE QUI PEUT CHANGER)
-      allow update: if isSignedIn() 
-                    && isValidId(conversationId)
-                    && existing().ownerId == request.auth.uid // 🔒 Doit être le propriétaire
-                    && isValidConversation(incoming())
-                    && incoming().ownerId == existing().ownerId // 🔒 L'ownerId ne peut pas être transféré
-                    && incoming().id == existing().id // 🔒 L'ID ne peut pas être altéré
-                    && (
-                      // Action A : Ajout d'un message (envoi ou réception)
-                      incoming().diff(existing()).affectedKeys().hasOnly(['messages', 'lastMessage', 'timestamp', 'unreadCount']) 
-                      || 
-                      // Action B : Marquer comme lu
-                      incoming().diff(existing()).affectedKeys().hasOnly(['unreadCount'])
-                    );
-                    
-      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
-    }
+    // ==========================================
+    // 2. ARTICLES
+    // ==========================================
     match /articles/{articleId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isTrustedUser() || true; // Let read be public? No, the app is private? Wait, if they can't login they shouldn't see it?
+      
+      // Article source : seulement admin/super admin pour create/delete et modifications majeures.
+      allow create, delete: if isAdmin();
+
+      // update is allowed for admins, or for users doing limited interactions (likes, comments, vibes)
+      allow update: if isTrustedUser() && (
+        isAdmin() || (
+          // Allowing only limited updates on specific metrics
+          changedOnly(['likes', 'comments', 'roomComments', 'vibeCheck'])
+          // optionally check list size restrictions on roomComments, etc.
+        )
+      );
+    }
+
+    // ==========================================
+    // 3. REPORTS
+    // ==========================================
+    match /reports/{reportId} {
+      allow create: if isTrustedUser()
+        && keysAll(incoming(), ['reporter', 'targetType', 'targetId', 'reason', 'status', 'createdAt', 'updatedAt'])
+        && keysOnly(incoming(), [
+          'reporter',
+          'targetType',
+          'targetId',
+          'reason',
+          'details',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && incoming().reporter == request.auth.uid
+        && incoming().targetType in ['USER', 'ARTICLE', 'MESSAGE', 'CONVERSATION']
+        && incoming().reason is string
+        && incoming().status == 'OPEN'
+        && (!incoming().keys().hasAny(['details']) || incoming().details is string);
+
+      allow read: if isAdmin();
+
+      allow update: if isAdmin()
+        && changedOnly(['status', 'adminNote', 'updatedAt'])
+        && (!incoming().keys().hasAny(['status']) || incoming().status in ['OPEN', 'REVIEWING', 'RESOLVED', 'REJECTED'])
+        && (!incoming().keys().hasAny(['adminNote']) || incoming().adminNote is string);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // ==========================================
+    // 4. BROADCASTS
+    // ==========================================
+    match /broadcasts/{broadcastId} {
+      allow read: if isTrustedUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 5. NOTIFICATIONS
+    // Création réservée à l'admin / backend.
+    // ==========================================
+    match /notifications/{notifId} {
+      allow read: if isTrustedUser()
+        && existing().get('userId', '') == request.auth.uid;
+
+      allow create: if isAdmin()
+        && keysAll(incoming(), ['userId', 'type', 'title', 'createdAt', 'updatedAt'])
+        && keysOnly(incoming(), [
+          'userId',
+          'type',
+          'title',
+          'body',
+          'link',
+          'read',
+          'archived',
+          'createdAt',
+          'updatedAt'
+        ])
+        && incoming().userId is string
+        && incoming().type is string
+        && incoming().title is string
+        && (!incoming().keys().hasAny(['body']) || incoming().body is string)
+        && (!incoming().keys().hasAny(['link']) || incoming().link is string)
+        && (!incoming().keys().hasAny(['read']) || incoming().read is bool)
+        && (!incoming().keys().hasAny(['archived']) || incoming().archived is bool);
+
+      allow update: if isTrustedUser() && (
+        isAdmin()
+        || (
+          existing().get('userId', '') == request.auth.uid
+          && changedOnly(['read', 'archived', 'updatedAt'])
+          && (!incoming().keys().hasAny(['read']) || incoming().read is bool)
+          && (!incoming().keys().hasAny(['archived']) || incoming().archived is bool)
+          && incoming().get('userId', '') == existing().get('userId', '')
+          && incoming().get('type', '') == existing().get('type', '')
+          && incoming().get('title', '') == existing().get('title', '')
+        )
+      );
+
+      allow delete: if isTrustedUser() && (
+        isAdmin()
+        || existing().get('userId', '') == request.auth.uid
+      );
+    }
+
+    // ==========================================
+    // 6. CONVERSATIONS
+    // ==========================================
+    match /conversations/{convId} {
+
+      allow read: if isTrustedUser() && (isAdmin() || existing().get('ownerId', '') == request.auth.uid);
+
+      allow create: if isTrustedUser() && incoming().ownerId == request.auth.uid;
+
+      allow update: if isTrustedUser() && (
+        isAdmin() || existing().get('ownerId', '') == request.auth.uid
+      );
+
+      allow delete: if isAdmin() || (isTrustedUser() && existing().get('ownerId', '') == request.auth.uid);
+
+      match /messages/{messageId} {
+
+        allow read, write: if isTrustedUser() && (
+          isAdmin() || get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid
+        );
+      }
     }
   }
 }

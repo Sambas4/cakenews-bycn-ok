@@ -1,9 +1,10 @@
-import { Component, Input, output, signal, computed, inject } from '@angular/core';
+import { Component, Input, output, signal, computed, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import { ReportTicket, AuditLog } from '../../types';
-import { MOCK_REPORTS } from '../../data/mockData';
+import { SupabaseService } from '../../services/supabase.service';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 type AuditViewMode = 'truth' | 'ethics' | 'tech' | 'archives';
 
@@ -306,14 +307,54 @@ type AuditViewMode = 'truth' | 'ethics' | 'tech' | 'archives';
     </div>
   `
 })
-export class AdminAuditComponent {
+export class AdminAuditComponent implements OnInit, OnDestroy {
   sendNotification = output<{target: string, content: string}>();
-  editArticle = output<string>();
+  onEditArticle = output<string>();
 
-  reports = signal<ReportTicket[]>(MOCK_REPORTS);
+  reports = signal<ReportTicket[]>([]);
   selectedReport = signal<ReportTicket | null>(null);
   viewMode = signal<AuditViewMode>('truth');
   internalNote = '';
+  
+  private channelReports: RealtimeChannel | null = null;
+  private supabaseService = inject(SupabaseService);
+
+  async ngOnInit() {
+      try {
+          const { data, error } = await this.supabaseService.client.from('reports').select('*');
+          if (!error && data) {
+              this.setReports(data as ReportTicket[]);
+          }
+      } catch (e) {
+          console.warn('Failed initial fetch reports', e);
+      }
+
+      this.channelReports = this.supabaseService.client.channel('public:reports')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, async () => {
+              const { data } = await this.supabaseService.client.from('reports').select('*');
+              if (data) this.setReports(data as ReportTicket[]);
+          })
+          .subscribe();
+  }
+
+  ngOnDestroy() {
+      if (this.channelReports) {
+          this.supabaseService.client.removeChannel(this.channelReports);
+      }
+  }
+
+  private setReports(fetchedReports: ReportTicket[]) {
+      this.reports.set(fetchedReports);
+      if (this.selectedReport()) {
+          const currentId = this.selectedReport()!.id;
+          const updatedReport = fetchedReports.find(r => r.id === currentId);
+          if (updatedReport) {
+              this.selectedReport.set(updatedReport);
+          } else {
+              this.selectedReport.set(null);
+          }
+      }
+  }
 
   filteredReports = computed(() => {
       const mode = this.viewMode();
@@ -345,13 +386,18 @@ export class AdminAuditComponent {
       return 'text-red-500';
   }
 
-  handleAssign(report: ReportTicket) {
-      const updated = { ...report, status: 'IN_PROGRESS' as const, assignedTo: 'Moi (Admin)' };
-      this.reports.update(prev => prev.map(r => r.id === report.id ? updated : r));
-      this.selectedReport.set(updated);
+  async handleAssign(report: ReportTicket) {
+      try {
+          await this.supabaseService.client.from('reports').update({
+              status: 'IN_PROGRESS',
+              assignedTo: 'Moi (Admin)'
+          }).eq('id', report.id);
+      } catch (error) {
+          console.error("Erreur d'assignation:", error);
+      }
   }
 
-  handleAddNote() {
+  async handleAddNote() {
       const report = this.selectedReport();
       if (!report || !this.internalNote.trim()) return;
       
@@ -362,17 +408,17 @@ export class AdminAuditComponent {
           timestamp: new Date().toLocaleTimeString()
       };
       
-      const updated = { 
-          ...report, 
-          internalNotes: [...(report.internalNotes || []), newNote] 
-      };
-      
-      this.reports.update(prev => prev.map(r => r.id === report.id ? updated : r));
-      this.selectedReport.set(updated);
-      this.internalNote = '';
+      try {
+          await this.supabaseService.client.from('reports').update({
+              internalNotes: [...(report.internalNotes || []), newNote]
+          }).eq('id', report.id);
+          this.internalNote = '';
+      } catch (error) {
+          console.error("Erreur d'ajout de note:", error);
+      }
   }
 
-  handleVerdict(verdict: 'VALID' | 'INVALID' | 'WARN', customMsg?: string) {
+  async handleVerdict(verdict: 'VALID' | 'INVALID' | 'WARN', customMsg?: string) {
       const report = this.selectedReport();
       if (!report) return;
 
@@ -396,9 +442,13 @@ export class AdminAuditComponent {
 
       this.sendNotification.emit({ target: report.reporter, content: notifMsg });
 
-      const updated = { ...report, status: newStatus };
-      this.reports.update(prev => prev.map(r => r.id === report.id ? updated : r));
-      this.selectedReport.set(null);
+      try {
+          await this.supabaseService.client.from('reports').update({
+              status: newStatus
+          }).eq('id', report.id);
+      } catch (error) {
+          console.error("Erreur de verdict:", error);
+      }
   }
 
   handleBack(): boolean {

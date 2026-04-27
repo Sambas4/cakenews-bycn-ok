@@ -183,18 +183,44 @@ export interface UserStats {
     commentsPosted: number;
     reportsReceived: number;
     trustScore: number;
+    postsRead?: number;
 }
 
+export interface UserProfile {
+  uid: string;
+  email?: string;
+  displayName: string;
+  photoURL?: string;
+  bio?: string;
+  username?: string;
+  joinDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  status?: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
+  moderationNote?: string;
+}
+
+export interface PublicProfile {
+  uid: string;
+  displayName: string;
+  photoURL?: string;
+  bio?: string;
+  username?: string;
+  updatedAt?: string;
+}
+
+// Keep UserData as legacy for now if needed, but redefine it to match UserProfile structure or avoid breaking.
 export interface UserData {
-  id: string;
-  name: string;
-  handle: string;
-  role: 'USER' | 'ADMIN' | 'MODERATOR';
-  status: 'ACTIVE' | 'BANNED' | 'PENDING';
+  id: string; // Mapping to uid
+  name: string; // Mapping to displayName
+  handle: string; // Mapping to username
+  email?: string;
+  role: 'USER' | 'ADMIN' | 'MODERATOR'; // Not persisted on client side directly based on rules, computed by claims
+  status: 'ACTIVE' | 'SUSPENDED' | 'BANNED' | 'PENDING';
   joinDate: string;
-  avatar: string;
-  location: UserLocation;
-  stats: UserStats;
+  avatar: string; // Mapping to photoURL
+  location: UserLocation; // Might need to be moved to a private sub-collection or local settings
+  stats: UserStats; // Should be sub-collections, keeping for UI compile
 }
 
 export interface BroadcastCampaign {

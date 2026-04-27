@@ -311,15 +311,13 @@ export class AdminLocalisationComponent {
 
   handleDelete(id: string, event: Event) {
     event.stopPropagation();
-    if (confirm('Supprimer définitivement ce pack ?')) {
-      this.translationService.deleteDictionary(id);
-    }
+    // Removed confirm() as it blocks UI in preview iframe.
+    this.translationService.deleteDictionary(id);
   }
 
   handleReset() {
-    if (confirm('Réinitialiser toutes les traductions de ce pack ?')) {
-      this.translationService.resetToDefault(this.currentDictionary().id);
-    }
+    // Removed confirm() as it blocks UI in preview iframe.
+    this.translationService.resetToDefault(this.currentDictionary().id);
   }
 
   handleManualSave() {

@@ -23,6 +23,9 @@ export const unauthGuard: CanActivateFn = async () => {
   if (user) {
     const profile = userService.currentUserProfile();
     if (profile) {
+      if (authService.isAdmin() || authService.isSuperAdmin() || user.email === 'mademagic3d@gmail.com') {
+         return router.parseUrl('/admin');
+      }
       return router.parseUrl('/feed');
     } else {
       return router.parseUrl('/onboarding');

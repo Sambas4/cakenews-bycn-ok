@@ -3,27 +3,32 @@ import { Article, Message, ExternalVoice, AppNotification, ReportTicket, UserDat
 
 export const MOCK_USERS: UserData[] = [
   { 
-    id: '1', name: 'Alex Carter', handle: '@alex_news', role: 'ADMIN', status: 'ACTIVE', joinDate: '12 Oct 2023', avatar: 'https://i.pravatar.cc/150?u=current',
+    id: '0', name: 'Magic 3D', handle: '@mademagic', email: 'mademagic3d@gmail.com', role: 'ADMIN', status: 'ACTIVE', joinDate: '01 Jan 2024', avatar: 'https://i.pravatar.cc/150?u=admin',
+    location: { neighborhood: 'Paris', city: 'Paris', country: 'France', isSet: true },
+    stats: { likesGiven: 9999, likesReceived: 9999, commentsPosted: 9999, reportsReceived: 0, trustScore: 100 }
+  },
+  { 
+    id: '1', name: 'Alex Carter', handle: '@alex_news', email: 'alex@example.com', role: 'ADMIN', status: 'ACTIVE', joinDate: '12 Oct 2023', avatar: 'https://i.pravatar.cc/150?u=current',
     location: { neighborhood: 'Louis', city: 'Libreville', country: 'Gabon', isSet: true },
     stats: { likesGiven: 1240, likesReceived: 8500, commentsPosted: 342, reportsReceived: 0, trustScore: 99 }
   },
   { 
-    id: '2', name: 'Sarah Connor', handle: '@sarah_c', role: 'USER', status: 'ACTIVE', joinDate: '15 Jan 2024', avatar: 'https://i.pravatar.cc/150?u=sarah',
+    id: '2', name: 'Sarah Connor', handle: '@sarah_c', email: 'sarah@example.com', role: 'USER', status: 'ACTIVE', joinDate: '15 Jan 2024', avatar: 'https://i.pravatar.cc/150?u=sarah',
     location: { neighborhood: 'Nzeng Ayong', city: 'Libreville', country: 'Gabon', isSet: true },
     stats: { likesGiven: 45, likesReceived: 12, commentsPosted: 8, reportsReceived: 0, trustScore: 75 }
   },
   { 
-    id: '3', name: 'Troll Bot', handle: '@bad_guy_99', role: 'USER', status: 'BANNED', joinDate: '01 Feb 2024', avatar: 'https://i.pravatar.cc/150?u=troll',
+    id: '3', name: 'Troll Bot', handle: '@bad_guy_99', email: 'troll@example.com', role: 'USER', status: 'BANNED', joinDate: '01 Feb 2024', avatar: 'https://i.pravatar.cc/150?u=troll',
     location: { neighborhood: 'Akanda', city: 'Libreville', country: 'Gabon', isSet: true },
     stats: { likesGiven: 0, likesReceived: 2, commentsPosted: 150, reportsReceived: 45, trustScore: 5 }
   },
   { 
-    id: '4', name: 'Moderator Joe', handle: '@mod_joe', role: 'MODERATOR', status: 'ACTIVE', joinDate: '20 Nov 2023', avatar: 'https://i.pravatar.cc/150?u=joe',
+    id: '4', name: 'Moderator Joe', handle: '@mod_joe', email: 'joe@example.com', role: 'MODERATOR', status: 'ACTIVE', joinDate: '20 Nov 2023', avatar: 'https://i.pravatar.cc/150?u=joe',
     location: { neighborhood: 'Centre Ville', city: 'Port-Gentil', country: 'Gabon', isSet: true },
     stats: { likesGiven: 300, likesReceived: 450, commentsPosted: 120, reportsReceived: 1, trustScore: 95 }
   },
   { 
-    id: '5', name: 'New User', handle: '@newbie', role: 'USER', status: 'PENDING', joinDate: 'Aujourd\'hui', avatar: 'https://i.pravatar.cc/150?u=new',
+    id: '5', name: 'New User', handle: '@newbie', email: 'new@example.com', role: 'USER', status: 'PENDING', joinDate: 'Aujourd\'hui', avatar: 'https://i.pravatar.cc/150?u=new',
     location: { neighborhood: '', city: '', country: '', isSet: false },
     stats: { likesGiven: 0, likesReceived: 0, commentsPosted: 0, reportsReceived: 0, trustScore: 50 }
   },

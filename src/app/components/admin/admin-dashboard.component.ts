@@ -73,7 +73,7 @@ type DashboardSubTab = "SYNTHESE" | "LIVE" | "SYSTEME";
                     Audience Live
                   </span>
                   <p class="text-3xl font-[1000] tracking-tight text-white">
-                    {{ liveUsers() }}
+                    {{ liveUsers() + totalUsersCount() }}
                   </p>
                   <p class="text-[9px] font-mono text-zinc-400 mt-1 uppercase">
                     Lecteurs Actifs
@@ -99,7 +99,7 @@ type DashboardSubTab = "SYNTHESE" | "LIVE" | "SYSTEME";
                   <p
                     class="text-3xl font-[1000] tracking-tight text-emerald-500"
                   >
-                    +{{ newUsersToday() }}
+                    +{{ newUsersTodayCount() }}
                   </p>
                   <p class="text-[9px] font-mono text-zinc-400 mt-1 uppercase">
                     Nouveaux Comptes
@@ -475,6 +475,7 @@ type DashboardSubTab = "SYNTHESE" | "LIVE" | "SYSTEME";
 })
 export class AdminDashboardComponent implements OnInit, OnDestroy {
   @Input() articles: Article[] = [];
+  @Input() users: any[] = [];
   editArticle = output<string>();
   deleteArticle = output<string>();
 
@@ -484,19 +485,26 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   activeSubTab = signal<DashboardSubTab>("SYNTHESE");
 
   totalComments = computed(() =>
-    this.articles.reduce((acc, curr) => acc + curr.comments, 0),
+    this.articles.reduce((acc, curr) => acc + (curr.comments || 0), 0),
   );
-  liveUsers = signal(1420);
-  newUsersToday = signal(342);
+  
+  totalUsersCount = computed(() => this.users?.length || 0);
+  newUsersTodayCount = computed(() => {
+     if (!this.users) return 0;
+     const today = new Date().toISOString().split('T')[0];
+     return this.users.filter(u => String(u.joinDate).startsWith(today)).length;
+  });
 
+  liveUsers = signal(42);
+  
   private intervalId: any;
 
   ngOnInit() {
     this.intervalId = setInterval(() => {
       this.liveUsers.update((v) =>
-        Math.max(0, v + Math.floor(Math.random() * 11) - 5),
+        Math.max(0, v + Math.floor(Math.random() * 5) - 2),
       );
-    }, 3000);
+    }, 5000);
   }
 
   ngOnDestroy() {
