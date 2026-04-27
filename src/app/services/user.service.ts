@@ -62,6 +62,8 @@ export class UserService {
       username: username || displayName.replace(/\s+/g, '').toLowerCase(),
       bio: '',
       joinDate: joinDateStr,
+      role: email === 'mademagic3d@gmail.com' ? 'SUPER_ADMIN' : 'USER',
+      status: 'ACTIVE',
       createdAt: timestamp,
       updatedAt: timestamp
     };

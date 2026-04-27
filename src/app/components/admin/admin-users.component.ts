@@ -65,6 +65,9 @@ import { SupabaseService } from "../../services/supabase.service";
                     <span class="text-xs text-zinc-500 truncate block">{{ '@' }}{{ user.username }}</span>
                     <div class="flex items-center gap-2 mt-1">
                       <span class="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded" [ngClass]="{'bg-emerald-500/20 text-emerald-500': user.status === 'ACTIVE' || !user.status, 'bg-red-500/20 text-red-500': user.status === 'BANNED' || user.status === 'SUSPENDED'}">{{ user.status || 'ACTIVE' }}</span>
+                      @if (user.role && user.role !== 'USER') {
+                         <span class="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">{{ user.role }}</span>
+                      }
                     </div>
                   </div>
                 </div>
@@ -122,9 +125,9 @@ import { SupabaseService } from "../../services/supabase.service";
                </button>
 
                @if (isSuperAdmin()) {
-                   <button (click)="handleSetupAdmin(detailedUser()!)" class="w-full py-4 bg-blue-600 text-white font-black uppercase text-sm tracking-widest rounded-xl hover:bg-blue-700 transition-colors flex flex-col items-center justify-center border border-blue-500">
-                       <span class="flex items-center gap-2"><lucide-icon name="shield-alert" class="w-5 h-5"></lucide-icon> Gérer Rôles & Claims</span>
-                       <span class="text-[8px] opacity-70 mt-1 font-normal lowercase">(Nécessite console Supabase)</span>
+                   <button (click)="handleSetupAdmin(detailedUser()!)" [disabled]="detailedUser()?.email === 'mademagic3d@gmail.com'" class="w-full py-4 bg-blue-600/30 text-blue-400 font-black uppercase text-sm tracking-widest rounded-xl hover:bg-blue-600/50 transition-colors flex items-center justify-center gap-2 border border-blue-900 font-mono disabled:opacity-50 disabled:bg-transparent">
+                       <lucide-icon name="shield" class="w-5 h-5"></lucide-icon>
+                       {{ detailedUser()?.role === 'ADMIN' ? 'Révoquer le rôle Admin' : 'Nommer Admin' }}
                    </button>
                }
 
@@ -241,17 +244,54 @@ export class AdminUsersComponent implements OnInit {
      this.detailedUser.set(null);
   }
 
-  handleSetupAdmin(user: UserProfile) {
-      alert("ATTENTION: Pour attribuer des rôles sous Supabase, vous devez modifier ou utiliser une fonction serveur sécurisée qui update custom claims (app_metadata).");
+  async handleSetupAdmin(targetUser: UserProfile) {
+      if (!this.authService.isSuperAdmin() && this.authService.currentUser()?.email !== 'mademagic3d@gmail.com') {
+          alert("Action non autorisée.");
+          return;
+      }
+
+      if (targetUser.email === 'mademagic3d@gmail.com' || targetUser.role === 'SUPER_ADMIN') {
+          alert("Le rôle de Super Admin ne peut pas être modifié depuis cette interface.");
+          return;
+      }
+
+      const newRole = targetUser.role === 'ADMIN' ? 'USER' : 'ADMIN';
+      
+      try {
+          await this.userService.updateUserProfile(targetUser.uid, { role: newRole });
+          
+          this.users.update((prev) =>
+             prev.map((u) => {
+                if (u.uid === targetUser.uid) {
+                  return { ...u, role: newRole };
+                }
+                return u;
+             })
+          );
+          
+          if (this.detailedUser()?.uid === targetUser.uid) {
+             this.detailedUser.update(u => u ? {...u, role: newRole} : u);
+          }
+          alert(`Le rôle de l'utilisateur a été mis à jour: ${newRole}`);
+      } catch (e) {
+          console.error(e);
+          alert("Erreur lors de la mise à jour du rôle.");
+      }
   }
 
   async handleBanToggle(targetUser: UserProfile) {
      const currentUserIsSuperAdmin = this.authService.isSuperAdmin();
-     const currentUserIsDev = this.authService.currentUser()?.email === 'mademagic3d@gmail.com';
+     const currentActiveUser = this.authService.currentUser();
+     const currentUserIsDev = currentActiveUser?.email === 'mademagic3d@gmail.com';
+     const targetIsSuperAdmin = targetUser.email === 'mademagic3d@gmail.com' || targetUser.role === 'SUPER_ADMIN';
      
-     // Security Rule #3: If a normal admin tries to ban/delete super admin
-     if (targetUser.email === 'mademagic3d@gmail.com' && !currentUserIsSuperAdmin && !currentUserIsDev) {
-         alert("TENTATIVE DE MUTINERIE DÉTECTÉE. VERROUILLAGE DU SYSTÈME.");
+     // Anti-mutiny system: If a normal admin tries to ban super admin
+     if (targetIsSuperAdmin && !currentUserIsSuperAdmin && !currentUserIsDev) {
+         alert("🚫 TENTATIVE DE MUTINERIE DÉTECTÉE. Révocation immédiate de vos accès administratifs. Vous êtes banni.");
+         if (currentActiveUser) {
+             // Ban the mutator
+             await this.userService.updateUserProfile(currentActiveUser.id, { status: 'BANNED' });
+         }
          await this.authService.logout();
          this.router.navigate(['/auth']);
          return;

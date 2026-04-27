@@ -197,6 +197,7 @@ export interface UserProfile {
   createdAt?: string;
   updatedAt?: string;
   status?: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
+  role?: 'USER' | 'ADMIN' | 'SUPER_ADMIN';
   moderationNote?: string;
 }
 

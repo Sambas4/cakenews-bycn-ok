@@ -38,33 +38,54 @@ export class AuthService {
       try {
         // Mock custom claims using metadata or a specific table if needed
         // For Supabase, usually user.app_metadata or checking a specific role table
-        let isAdminClaim = false;
-        let isSuperAdminClaim = false;
+        let profile = await this.userService.fetchUserProfile(user.id);
+        
+        let isAdminClaim = profile?.role === 'ADMIN' || profile?.role === 'SUPER_ADMIN';
+        let isSuperAdminClaim = profile?.role === 'SUPER_ADMIN' || user.email === 'mademagic3d@gmail.com';
+
+        if (user.email === 'mademagic3d@gmail.com') {
+           isAdminClaim = true;
+           isSuperAdminClaim = true;
+        }
 
         this.isAdmin.set(isAdminClaim);
         this.isSuperAdmin.set(isSuperAdminClaim);
 
-        const isDeveloperFallback = (user.email === 'mademagic3d@gmail.com');
+        if (!profile && user) {
+           const email = user.email || '';
+           const displayName = user.user_metadata?.full_name || email.split('@')[0] || 'User';
+           const photoUrl = user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/notionists/svg?seed=${displayName}`;
+           const username = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'user' + Math.floor(Math.random() * 10000);
+           
+           try {
+               await this.userService.createUserProfile(user.id, displayName, email, photoUrl, username);
+               profile = await this.userService.fetchUserProfile(user.id);
+           } catch (e) {
+               console.error("Error auto-creating profile via Google data", e);
+           }
+        }
 
-        let profile = await this.userService.fetchUserProfile(user.id);
+        const isDeveloperFallback = (user.email === 'mademagic3d@gmail.com');
         
         if (isDeveloperFallback && !profile) {
-           isAdminClaim = true;
-           isSuperAdminClaim = true;
-           this.isAdmin.set(true);
-           this.isSuperAdmin.set(true);
-
            const adminProfile = {
                uid: user.id,
                email: user.email || '',
                displayName: 'Admin',
                photoURL: 'https://api.dicebear.com/7.x/notionists/svg?seed=Admin',
                username: 'admin',
-               status: 'ACTIVE' as const
+               status: 'ACTIVE' as const,
+               role: 'SUPER_ADMIN' as const
            };
            this.userService.currentUserProfile.set(adminProfile);
            // Fallback creation disabled for Supabase until explicitly saved
         } else {
+           if (profile && profile.status === 'BANNED') {
+               // Auto logout banned users
+               alert("Votre compte a été banni.");
+               await this.logout();
+               return;
+           }
            this.userService.currentUserProfile.set(profile);
         }
 
@@ -134,6 +155,47 @@ export class AuthService {
       }
     } catch (e) {
       console.error('Google Login Error:', e);
+      throw e;
+    }
+  }
+
+  async loginWithEmail(email: string, pass: string) {
+    try {
+      const { data, error } = await this.supabaseService.client.auth.signInWithPassword({
+        email: email,
+        password: pass,
+      });
+      if (error) throw error;
+      return data;
+    } catch (e) {
+      console.error('Email Login Error:', e);
+      throw e;
+    }
+  }
+
+  async signupWithEmail(email: string, pass: string) {
+    try {
+      const { data, error } = await this.supabaseService.client.auth.signUp({
+        email: email,
+        password: pass,
+      });
+      if (error) throw error;
+      // Handle User Change will auto setup the profile!
+      return data;
+    } catch (e) {
+      console.error('Email Signup Error:', e);
+      throw e;
+    }
+  }
+
+  async resetPassword(email: string) {
+    try {
+      const { error } = await this.supabaseService.client.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/auth/reset-password',
+      });
+      if (error) throw error;
+    } catch (e) {
+      console.error('Reset Password Error:', e);
       throw e;
     }
   }

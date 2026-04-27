@@ -181,8 +181,18 @@ export class OnboardingViewComponent {
       
       const finalAvatarUrl = this.buildAvatarUrl(selectedSeed);
       
-      // Save avatarBg to profile!
-      await this.userService.createUserProfile(user.uid, pseudo, finalAvatarUrl, hexColor);
+      await this.userService.createUserProfile(
+        user.id, // Supabase User object uses `id`
+        pseudo,
+        user.email || '',
+        finalAvatarUrl, // This acts as photoURL
+        pseudo // This acts as username
+      );
+      
+      // We don't have a place in publicProfile for hexColor right now,
+      // but if the UI needs it, we could save it to 'bio' or add a DB column.
+      // For now we'll just allow it to fall back to the default profile setup.
+
       this.router.navigate(['/feed']);
     } catch (e: any) {
       console.error(e);
