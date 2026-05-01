@@ -191,6 +191,10 @@ export interface UserProfile {
   email?: string;
   displayName: string;
   photoURL?: string;
+  /** Avatar URL alias used across UI components (mirrors photoURL). */
+  avatarUrl?: string;
+  /** Background colour set during onboarding. */
+  avatarBg?: string;
   bio?: string;
   username?: string;
   joinDate?: string;
@@ -198,13 +202,35 @@ export interface UserProfile {
   updatedAt?: string;
   status?: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
   role?: 'USER' | 'ADMIN' | 'SUPER_ADMIN';
+  /** Convenience flag derived from role for the UI. */
+  isAdmin?: boolean;
   moderationNote?: string;
+
+  // Optional preferences (premium profile)
+  preferences?: {
+    notifications?: {
+      directMessages?: boolean;
+      replies?: boolean;
+      breakingNews?: boolean;
+      digest?: 'never' | 'daily' | 'weekly';
+    };
+    privacy?: {
+      showActivity?: boolean;
+      showLocation?: boolean;
+      allowDirectMessages?: 'everyone' | 'verified' | 'none';
+    };
+    accessibility?: {
+      reduceMotion?: boolean;
+      largerText?: boolean;
+    };
+  };
 }
 
 export interface PublicProfile {
   uid: string;
   displayName: string;
   photoURL?: string;
+  avatarBg?: string;
   bio?: string;
   username?: string;
   updatedAt?: string;

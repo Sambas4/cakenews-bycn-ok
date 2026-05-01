@@ -5,7 +5,7 @@ import { LucideAngularModule } from 'lucide-angular';
 import { DataService } from '../services/data.service';
 import { InteractionService } from '../services/interaction.service';
 import { TranslationService } from '../services/translation.service';
-import { FeedEngineService } from '../services/feed-engine.service';
+import { FeedAlgorithmService } from '../services/feed-algorithm.service';
 import { ArticleCardComponent } from '../components/article-card.component';
 import { Article, Category } from '../types';
 import { THEME_GROUPS, CATEGORY_COLORS } from '../constants';
@@ -63,19 +63,19 @@ export class FeedViewComponent implements OnInit, OnDestroy {
   private dataService = inject(DataService);
   private interaction = inject(InteractionService);
   private translation = inject(TranslationService);
-  private feedEngine = inject(FeedEngineService);
+  private feedAlgorithm = inject(FeedAlgorithmService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
   t = this.translation.t;
   Math = Math;
 
-  // L'état du feed (isolé de la réactivité continue brute pour ne pas recréer le DOM à chaque micro-signal)
+  // The feed is recomputed when the underlying article inventory changes.
+  // The algorithm itself reads engagement signals via `untracked()` so a
+  // single like / scroll does not re-shuffle the order under the user.
   feedArticles = computed(() => {
-    // This allows the feed to automatically reflect new likes/comments from snapshot 
-    // while keeping the order stable based on FeedEngine rules.
     const allArticles = this.dataService.articles();
-    return this.feedEngine.generateAdaptiveFeed(allArticles);
+    return this.feedAlgorithm.generate(allArticles);
   });
   
   articles = this.feedArticles;

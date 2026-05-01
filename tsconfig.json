@@ -22,10 +22,9 @@
     }
   },
   "exclude": [
-    "components/**/*.tsx",
-    "components/**/*.ts",
-    "App.tsx",
-    "constants.tsx"
+    "node_modules",
+    "dist",
+    "out-tsc"
   ],
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

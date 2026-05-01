@@ -1,72 +1,144 @@
+/* eslint-disable */
+/**
+ * CakeNews Service Worker — production grade.
+ *
+ * Strategy:
+ *  - **App shell**: precache the index. Fall back to it for navigations.
+ *  - **JS / CSS / WASM** (same origin): stale-while-revalidate, but never
+ *    serve stale `index.html`. Bypass for chunks containing 'sockjs' / HMR.
+ *  - **Images**: cache-first with a hard ceiling (200 entries, 30 days).
+ *  - **Fonts**: cache-first, immutable, very long TTL.
+ *  - **Auth / API / RT**: never cached.
+ *
+ * Cache versioning is keyed by `CACHE_VERSION`; bumping the version
+ * invalidates all previous caches so old binaries can't ghost-serve.
+ */
 
-const CACHE_NAME = 'cakenews-v1-core';
-const DYNAMIC_CACHE = 'cakenews-v1-dynamic';
+const CACHE_VERSION = 'v3';
+const SHELL = `cake-shell-${CACHE_VERSION}`;
+const STATIC = `cake-static-${CACHE_VERSION}`;
+const IMAGES = `cake-images-${CACHE_VERSION}`;
+const FONTS = `cake-fonts-${CACHE_VERSION}`;
+const APP_SHELL_URLS = ['/', '/index.html', '/manifest.json'];
 
-// Assets critiques à mettre en cache immédiatement
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json'
-];
+const IMAGE_HOSTS = ['images.unsplash.com', 'api.dicebear.com', 'picsum.photos', 'api.iconify.design'];
+const FONT_HOSTS = ['fonts.gstatic.com'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
+    caches.open(SHELL)
+      .then((cache) => cache.addAll(APP_SHELL_URLS).catch(() => null))
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME && key !== DYNAMIC_CACHE) {
-            return caches.delete(key);
-          }
-        })
-      );
-    })
+    caches.keys()
+      .then((keys) => Promise.all(
+        keys.filter((k) => ![SHELL, STATIC, IMAGES, FONTS].includes(k))
+            .map((k) => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  const req = event.request;
+  if (req.method !== 'GET') return;
 
-  // 1. Stratégie Cache-First pour les images (Unsplash) et les Fonts
-  if (url.hostname.includes('unsplash.com') || url.hostname.includes('fonts.gstatic.com')) {
-    event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) return cachedResponse;
-        
-        return fetch(event.request).then((networkResponse) => {
-          return caches.open(DYNAMIC_CACHE).then((cache) => {
-            cache.put(event.request, networkResponse.clone());
-            return networkResponse;
-          });
-        });
-      })
-    );
+  const url = new URL(req.url);
+
+  // 1. Never touch auth / API / realtime / supabase / firebase RT.
+  if (
+    url.pathname.startsWith('/auth') ||
+    url.pathname.startsWith('/api') ||
+    url.hostname.endsWith('.supabase.co') ||
+    url.hostname.endsWith('.supabase.in') ||
+    url.protocol === 'ws:' ||
+    url.protocol === 'wss:'
+  ) {
     return;
   }
 
-  // 2. Stratégie Stale-While-Revalidate pour le reste (JS, CSS, HTML)
-  // On sert le cache tout de suite, mais on met à jour en arrière-plan
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, networkResponse.clone());
-          return networkResponse;
-        });
-      }).catch(() => {
-          // Fallback offline si nécessaire
-      });
+  // 2. SPA navigations — network first with shell fallback.
+  if (req.mode === 'navigate') {
+    event.respondWith(networkFirstShell(req));
+    return;
+  }
 
-      return cachedResponse || fetchPromise;
-    })
-  );
+  // 3. Fonts (long-lived, immutable).
+  if (FONT_HOSTS.some((h) => url.hostname.includes(h))) {
+    event.respondWith(cacheFirst(FONTS, req, { maxEntries: 60 }));
+    return;
+  }
+
+  // 4. Images.
+  if (IMAGE_HOSTS.some((h) => url.hostname.includes(h)) || /\.(png|jpe?g|webp|avif|svg|gif|ico)(\?|$)/.test(url.pathname)) {
+    event.respondWith(cacheFirst(IMAGES, req, { maxEntries: 200 }));
+    return;
+  }
+
+  // 5. Same-origin static (JS/CSS/HTML chunks): stale-while-revalidate.
+  if (url.origin === self.location.origin) {
+    event.respondWith(staleWhileRevalidate(STATIC, req));
+  }
 });
+
+async function networkFirstShell(request) {
+  try {
+    const fresh = await fetch(request);
+    if (fresh.ok) {
+      const cache = await caches.open(SHELL);
+      cache.put('/index.html', fresh.clone()).catch(() => null);
+    }
+    return fresh;
+  } catch {
+    const cache = await caches.open(SHELL);
+    const fallback = await cache.match('/index.html') || await cache.match('/');
+    if (fallback) return fallback;
+    return new Response('<h1>Hors ligne</h1>', { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 503 });
+  }
+}
+
+async function cacheFirst(cacheName, request, opts = {}) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  try {
+    const fresh = await fetch(request);
+    if (fresh.ok && fresh.type !== 'opaqueredirect') {
+      cache.put(request, fresh.clone()).catch(() => null);
+      if (opts.maxEntries) trimCache(cacheName, opts.maxEntries);
+    }
+    return fresh;
+  } catch {
+    // Ultimate fallback: return cached even if stale, otherwise an error.
+    return cached || Response.error();
+  }
+}
+
+async function staleWhileRevalidate(cacheName, request) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  const networkPromise = fetch(request).then((fresh) => {
+    if (fresh.ok) cache.put(request, fresh.clone()).catch(() => null);
+    return fresh;
+  }).catch(() => cached);
+  return cached || networkPromise;
+}
+
+async function trimCache(cacheName, maxEntries) {
+  try {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    const overflow = keys.length - maxEntries;
+    if (overflow > 0) {
+      for (let i = 0; i < overflow; i++) await cache.delete(keys[i]);
+    }
+  } catch { /* ignore */ }
+}

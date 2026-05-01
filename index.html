@@ -4,16 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#000000">
-    <meta name="description" content="L'information virale, vérifiée par l'humain.">
-    
-    <title>CakeNews | Angular Edition</title>
-    
+    <meta name="description" content="CakeNews — l'information virale, vérifiée par l'humain.">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CakeNews">
+
+    <title>CakeNews</title>
+
     <link rel="manifest" href="/manifest.json">
     <link rel="preconnect" href="https://images.unsplash.com">
     <link rel="dns-prefetch" href="https://images.unsplash.com">
+    <link rel="preconnect" href="https://api.dicebear.com">
+    <link rel="dns-prefetch" href="https://api.dicebear.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://picsum.photos">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -27,6 +36,9 @@
                     animation: {
                         'marquee-left': 'marquee-left 25s linear infinite',
                         'flash': 'flash 2s infinite',
+                        'fade-in': 'fadeIn 0.25s ease-out',
+                        'slide-up': 'slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                        'shimmer': 'shimmer 2s linear infinite',
                     },
                     keyframes: {
                         'marquee-left': {
@@ -36,20 +48,33 @@
                         'flash': {
                             '0%, 100%': { opacity: '1' },
                             '50%': { opacity: '0.4' },
+                        },
+                        'fadeIn': {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        'slideUp': {
+                            '0%': { opacity: '0', transform: 'translateY(8px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        },
+                        'shimmer': {
+                            '0%': { backgroundPosition: '-1000px 0' },
+                            '100%': { backgroundPosition: '1000px 0' }
                         }
                     }
                 }
             }
         }
     </script>
-    
+
     <style>
         :root {
             --cake-red: #ff0000;
             --cake-black: #000000;
+            --cake-accent: #7ae25c;
         }
         html {
-            font-size: 17px; /* Easing mobile reading */
+            font-size: 17px;
         }
         body {
             font-family: '"Open Sans"', system-ui, -apple-system, sans-serif;
@@ -57,12 +82,46 @@
             color: #ffffff;
             overflow: hidden;
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
             overscroll-behavior-y: none;
+            text-rendering: optimizeLegibility;
         }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-        
+        .mb-safe { margin-bottom: env(safe-area-inset-bottom); }
+
+        /* Discreet custom scrollbar — only used where lists really need it. */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+
+        /* Skeleton shimmer used by suspended cards. */
+        .cake-shimmer {
+            background: linear-gradient(90deg, #18181b 0%, #27272a 50%, #18181b 100%);
+            background-size: 1000px 100%;
+            animation: shimmer 2s linear infinite;
+        }
+
+        /* Initial paint splash so the user never stares at a blank screen. */
+        #cake-boot {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: #fff;
+            font-weight: 800;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            font-size: 10px;
+            transition: opacity 0.25s ease-out;
+        }
+        #cake-boot.hide { opacity: 0; pointer-events: none; }
+
         @media (min-width: 640px) {
             app-root {
                 max-width: 450px;
@@ -84,7 +143,29 @@
     </style>
 </head>
 <body class="bg-black">
+    <div id="cake-boot" aria-hidden="true">
+        <div class="flex flex-col items-center gap-3">
+            <div class="w-10 h-10 rounded-full border-2 border-white/10 border-t-white/80 animate-spin"></div>
+            <span>CakeNews</span>
+        </div>
+    </div>
     <app-root></app-root>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+        // Hide the boot splash as soon as Angular paints the first view.
+        const hideBoot = () => {
+            const b = document.getElementById('cake-boot');
+            if (!b) return;
+            b.classList.add('hide');
+            setTimeout(() => b.remove(), 350);
+        };
+        const observer = new MutationObserver(() => {
+            const root = document.querySelector('app-root > div');
+            if (root) { hideBoot(); observer.disconnect(); }
+        });
+        observer.observe(document.querySelector('app-root'), { childList: true, subtree: true });
+        // Safety timeout — never block the UI on a stuck mutation observer.
+        setTimeout(hideBoot, 6000);
+    </script>
 </body>
 </html>
