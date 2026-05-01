@@ -1,7 +1,9 @@
-import { Component, output, signal } from '@angular/core';
+import { Component, computed, inject, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
+import { PushPermissionService } from '../../services/push-permission.service';
+import { ToastService } from '../../services/toast.service';
 
 interface SettingItem {
   key: string;
@@ -142,6 +144,37 @@ const DEFAULTS: Record<string, boolean | string> = {
           </div>
         }
 
+        <!-- Push permission -->
+        <div class="mt-6">
+          <h2 class="px-5 mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Notifications push</h2>
+          <div class="mx-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+            <div class="px-4 py-3.5 flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0">
+                  <lucide-icon name="bell" class="w-4 h-4 text-emerald-300"></lucide-icon>
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-[13.5px] font-bold text-white">{{ pushLabel() }}</span>
+                  <span class="text-[10.5px] text-zinc-500 leading-snug">{{ pushHint() }}</span>
+                </div>
+              </div>
+              @if (push.canPrompt()) {
+                <button type="button" (click)="requestPush()"
+                  class="text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl bg-[#7ae25c] text-black hover:bg-[#9aef82] transition-colors">
+                  Activer
+                </button>
+              } @else {
+                <span class="text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border"
+                  [ngClass]="push.status() === 'granted'
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                    : 'bg-white/[0.04] border-white/[0.08] text-zinc-500'">
+                  {{ pushBadge() }}
+                </span>
+              }
+            </div>
+          </div>
+        </div>
+
         <!-- Danger -->
         <div class="mt-8 mx-3 bg-red-500/[0.04] border border-red-500/15 rounded-2xl overflow-hidden">
           <button type="button"
@@ -159,8 +192,43 @@ const DEFAULTS: Record<string, boolean | string> = {
 export class MessageSettingsComponent {
   back = output<void>();
 
+  protected push = inject(PushPermissionService);
+  private toast = inject(ToastService);
+
   readonly sections = SECTIONS;
   readonly values = signal<Record<string, boolean | string>>(this.load());
+
+  readonly pushLabel = computed(() => {
+    switch (this.push.status()) {
+      case 'granted':     return 'Notifications activées';
+      case 'denied':      return 'Notifications bloquées';
+      case 'unsupported': return 'Notifications indisponibles';
+      default:            return 'Activer les notifications';
+    }
+  });
+
+  readonly pushHint = computed(() => {
+    switch (this.push.status()) {
+      case 'granted':     return 'Tu seras alerté pour les breaking news et tes réponses.';
+      case 'denied':      return 'Réautorise-les depuis les paramètres système si tu changes d\'avis.';
+      case 'unsupported': return 'Ton navigateur ne supporte pas les push web.';
+      default:            return 'Une autorisation système, une seule fois — débrayable à tout moment.';
+    }
+  });
+
+  readonly pushBadge = computed(() => {
+    switch (this.push.status()) {
+      case 'granted': return 'Actif';
+      case 'denied':  return 'Refusé';
+      default:        return 'N/D';
+    }
+  });
+
+  async requestPush() {
+    const next = await this.push.request();
+    if (next === 'granted') this.toast.showToast('Notifications activées', 'success');
+    else if (next === 'denied') this.toast.showToast('Tu peux réautoriser depuis le navigateur', 'warning');
+  }
 
   toggle(key: string) {
     this.values.update(v => {

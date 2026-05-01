@@ -88,14 +88,40 @@ export class DataService {
 
   // --- Real-time Interactions ---
 
-  async likeArticle(articleId: string) {
+  /**
+   * Atomically bumps the public `likes` counter on an article.
+   * Negative deltas decrement (with a server-side `>= 0` floor that
+   * Postgres enforces via a CHECK constraint in the migration).
+   *
+   * The previous v1 only supported `+1` and silently dropped
+   * "un-likes". That left the per-article totals running away from
+   * the truth as soon as a single user toggled their like off. The
+   * delta API closes that loophole.
+   */
+  async adjustLikes(articleId: string, delta: number): Promise<void> {
+    if (!Number.isFinite(delta) || delta === 0) return;
     try {
-      const { data, error } = await this.supabaseService.client.from('articles').select('likes').eq('id', articleId).single();
+      const { data, error } = await this.supabaseService.client
+        .from('articles')
+        .select('likes')
+        .eq('id', articleId)
+        .single();
       if (error) throw error;
-      await this.supabaseService.client.from('articles').update({ likes: (data.likes || 0) + 1 }).eq('id', articleId);
-    } catch(e: any) {
-      console.error("Supabase update error", e);
+      const current = (data?.likes as number | null) ?? 0;
+      const next = Math.max(0, current + delta);
+      await this.supabaseService.client.from('articles').update({ likes: next }).eq('id', articleId);
+    } catch (e) {
+      console.error('[cake] adjustLikes failed', e);
     }
+  }
+
+  /**
+   * Backward-compatible thin wrapper around {@link adjustLikes} for
+   * callers that only ever incremented.
+   * @deprecated Use {@link adjustLikes} so unlikes are honoured.
+   */
+  async likeArticle(articleId: string) {
+    await this.adjustLikes(articleId, 1);
   }
 
   async updateVibe(articleId: string, currentVibeCheck: any) {

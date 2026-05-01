@@ -99,25 +99,23 @@ export class InteractionService {
 
   toggleLike(articleId: string) {
     this.likedArticles.update(likes => {
-      const isLiking = !likes.includes(articleId);
+      const wasLiked = likes.includes(articleId);
+      const isLiking = !wasLiked;
       const newLikes = isLiking
         ? [...likes, articleId]
         : likes.filter(id => id !== articleId);
-        
-      localStorage.setItem('cake_likes', JSON.stringify(newLikes));
-      
-      // Tell dataService to increment/decrement in DB directly!
-      if (isLiking) {
-        this.dataService.likeArticle(articleId);
-      } else {
-        // Technically not implemented yet in DataService (decrement), but for now we skip decrement or implement later
-      }
 
-      // Update user stats
+      localStorage.setItem('cake_likes', JSON.stringify(newLikes));
+
+      // Honour both directions: +1 on like, -1 on unlike. The DB layer
+      // floors at 0 so a stale unlike can never push the public total
+      // negative.
+      this.dataService.adjustLikes(articleId, isLiking ? 1 : -1);
+
       this.userStats.update(stats => {
         const newStats = {
           ...stats,
-          likesGiven: stats.likesGiven + (isLiking ? 1 : -1)
+          likesGiven: Math.max(0, stats.likesGiven + (isLiking ? 1 : -1)),
         };
         localStorage.setItem('cake_stats', JSON.stringify(newStats));
         return newStats;

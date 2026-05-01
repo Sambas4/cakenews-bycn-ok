@@ -135,6 +135,38 @@ export class ReactiveFeedBufferService {
     this.hydrate('initial');
   }
 
+  /**
+   * Place a specific article at the head of the buffer. Used when the
+   * user lands via a deep link (`/article/:id`) — without this the
+   * shared link would silently route to whatever the algorithm had
+   * ranked first instead of the article the URL pointed to.
+   *
+   * Returns `true` if the article was found and pinned, `false`
+   * otherwise. The caller (the feed view) can fall back to a normal
+   * hydrate when we return false.
+   */
+  pinArticle(id: string): boolean {
+    const inventory = this.mode.inventory();
+    const target = inventory.find(a => a.id === id);
+    if (!target) return false;
+
+    // Build a fresh window around the target — keep the rest of the
+    // ranking honest (we ask the regular ranker for context candidates).
+    const remaining = inventory.filter(a => a.id !== id);
+    const lane = this.mode.mode();
+    const context = lane === 'pulse'
+      ? this.algorithm.generate(remaining, WINDOW_SIZE * 3).slice(0, WINDOW_SIZE - 1)
+      : remaining.slice(0, WINDOW_SIZE - 1);
+
+    this.state.set({
+      served: [],
+      upcoming: [target, ...context],
+      pivotCount: 0,
+      lastPivotReason: null,
+    });
+    return true;
+  }
+
   // ────────────────────────────────────────────────────────────────
 
   private hydrate(reason: 'initial' | PivotReason) {

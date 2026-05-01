@@ -21,6 +21,7 @@ import { AdminDashboardComponent } from "./admin-dashboard.component";
 import { AdminStudioComponent } from "./admin-studio.component";
 import { AdminUsersComponent } from "./admin-users.component";
 import { AdminAuditComponent } from "./admin-audit.component";
+import { AdminCounterBriefsComponent } from "./admin-counter-briefs.component";
 import { AdminAntenneComponent } from "./admin-antenne.component";
 import { AdminLocalisationComponent } from "./admin-localisation.component";
 import { DataService } from "../../services/data.service";
@@ -41,6 +42,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
     AdminAuditComponent,
     AdminAntenneComponent,
     AdminLocalisationComponent,
+    AdminCounterBriefsComponent,
   ],
   template: `
     <div
@@ -196,6 +198,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
             <app-admin-audit
               (editArticle)="handleEditArticle($event)"
             ></app-admin-audit>
+            <app-admin-counter-briefs></app-admin-counter-briefs>
           }
           @case (AdminTab.ANTENNE) {
             <app-admin-antenne></app-admin-antenne>

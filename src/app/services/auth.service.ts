@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { SupabaseService } from './supabase.service';
 import { ToastService } from './toast.service';
 import { Logger } from './logger.service';
+import { LocalStorageCleanerService } from './local-storage-cleaner.service';
 import { User } from '@supabase/supabase-js';
 
 /**
@@ -26,6 +27,7 @@ export class AuthService {
   private supabaseService = inject(SupabaseService);
   private toast = inject(ToastService);
   private logger = inject(Logger);
+  private cleaner = inject(LocalStorageCleanerService);
 
   currentUser = signal<User | null>(null);
   isAuthReady = signal<boolean>(false);
@@ -196,6 +198,10 @@ export class AuthService {
   }
 
   async logout(): Promise<void> {
+    // Wipe user-scoped local state *before* the auth state change fires
+    // so the app re-renders against an empty profile, not the previous
+    // user's leftovers.
+    this.cleaner.purgeUserScope();
     await this.supabaseService.client.auth.signOut();
   }
 

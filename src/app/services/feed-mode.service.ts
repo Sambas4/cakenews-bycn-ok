@@ -3,6 +3,7 @@ import { Article } from '../types';
 import { FeedAlgorithmService } from './feed-algorithm.service';
 import { InteractionService } from './interaction.service';
 import { DataService } from './data.service';
+import { FollowService } from './follow.service';
 
 export type FeedMode = 'pulse' | 'radar' | 'cercle';
 
@@ -38,6 +39,7 @@ export class FeedModeService {
   private algorithm = inject(FeedAlgorithmService);
   private interaction = inject(InteractionService);
   private data = inject(DataService);
+  private follows = inject(FollowService);
 
   readonly mode = signal<FeedMode>(this.loadInitial());
 
@@ -91,20 +93,36 @@ export class FeedModeService {
   }
 
   private cercleSlice(pool: Article[]): Article[] {
-    const liked = new Set(this.interaction.likedArticles());
-    const commented = new Set(this.interaction.commentedArticles());
-    const saved = new Set(this.interaction.savedArticles());
+    // Explicit follows take precedence — that's the user's stated
+    // intent, the engagement heuristic only fills gaps.
+    const followedAuthors = new Set(this.follows.authors());
+    const followedTags = new Set(this.follows.tags().map(t => t.toLowerCase()));
+    const followedTopics = new Set(this.follows.topics());
 
-    const trustedAuthors = new Set<string>();
-    for (const a of pool) {
-      if (liked.has(a.id) || commented.has(a.id) || saved.has(a.id)) {
-        trustedAuthors.add(a.author);
+    if (followedAuthors.size + followedTags.size + followedTopics.size === 0) {
+      // Fallback heuristic — prevents an empty Cercle for new users.
+      const liked = new Set(this.interaction.likedArticles());
+      const commented = new Set(this.interaction.commentedArticles());
+      const saved = new Set(this.interaction.savedArticles());
+      const inferred = new Set<string>();
+      for (const a of pool) {
+        if (liked.has(a.id) || commented.has(a.id) || saved.has(a.id)) {
+          inferred.add(a.author);
+        }
       }
+      if (inferred.size === 0) return [];
+      return pool
+        .filter(a => inferred.has(a.author))
+        .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
     }
-    if (trustedAuthors.size === 0) return [];
 
     return pool
-      .filter(a => trustedAuthors.has(a.author))
+      .filter(a => {
+        if (followedAuthors.has(a.author)) return true;
+        if (followedTopics.has(a.category)) return true;
+        if (a.tags?.some(t => followedTags.has(t.toLowerCase()))) return true;
+        return false;
+      })
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
   }
 

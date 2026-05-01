@@ -119,14 +119,21 @@ export class FeedViewComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.route.paramMap.subscribe(params => {
       const id = params.get('id');
-      if (id && this.articles().length > 0) {
-        const index = this.articles().findIndex((a: Article) => a.id === id);
-        if (index >= 0 && index !== this.currentIndex) {
-          this.currentIndex = index;
-        }
-      } else {
+      if (!id) {
         this.currentIndex = 0;
+        return;
       }
+      // Try to align the cursor on an article already in the buffer.
+      const index = this.articles().findIndex((a: Article) => a.id === id);
+      if (index >= 0) {
+        this.currentIndex = index;
+        return;
+      }
+      // Otherwise: pin the article on the buffer head so the deep link
+      // actually opens the requested article instead of whatever the
+      // ranker had on top.
+      const pinned = this.buffer.pinArticle(id);
+      this.currentIndex = pinned ? 0 : 0;
     });
 
     this.routerSub = this.router.events.pipe(

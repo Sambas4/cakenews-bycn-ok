@@ -52,6 +52,11 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./views/profile.component').then(m => m.ProfileViewComponent),
   },
+  {
+    path: 'library/:kind',
+    canActivate: [authGuard],
+    loadComponent: () => import('./views/library.component').then(m => m.LibraryViewComponent),
+  },
 
   {
     path: 'onboarding',

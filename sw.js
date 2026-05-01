@@ -47,6 +47,50 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
+// ────────────────────────────────────────────────────────────────
+// Push notifications
+// ────────────────────────────────────────────────────────────────
+
+self.addEventListener('push', (event) => {
+  // Payloads come from the Edge Function as a JSON object shaped like
+  // { title, body, tone, url, tag? }. We're permissive on parsing so a
+  // future server change can extend the payload without breaking us.
+  let payload = {};
+  if (event.data) {
+    try { payload = event.data.json(); } catch { payload = { title: 'CakeNews', body: event.data.text() }; }
+  }
+  const title = payload.title || 'CakeNews';
+  const options = {
+    body: payload.body || '',
+    icon: 'https://api.iconify.design/lucide:zap.svg?color=%23ffffff',
+    badge: 'https://api.iconify.design/lucide:zap.svg?color=%23ffffff',
+    tag: payload.tag || payload.tone || 'cakenews',
+    renotify: true,
+    data: { url: payload.url || '/feed' },
+    vibrate: [60, 30, 60],
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = event.notification.data?.url || '/feed';
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // Re-focus an existing CakeNews tab if any, then route it.
+    for (const client of all) {
+      if ('focus' in client) {
+        try { await client.focus(); } catch { /* ignore */ }
+        if ('navigate' in client) {
+          try { await client.navigate(target); } catch { /* ignore */ }
+        }
+        return;
+      }
+    }
+    if (self.clients.openWindow) await self.clients.openWindow(target);
+  })());
+});
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;

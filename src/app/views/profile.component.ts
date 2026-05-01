@@ -136,9 +136,8 @@ export class ProfileViewComponent {
   goBack() { void this.router.navigate(['/feed']); }
   goToAdmin() { void this.router.navigate(['/admin']); }
 
-  goToFeedFiltered(_kind: 'saved' | 'history' | 'likes') {
-    // Hook for future filtered feed views; for now route to /feed.
-    void this.router.navigate(['/feed']);
+  goToFeedFiltered(kind: 'saved' | 'history' | 'likes') {
+    void this.router.navigate(['/library', kind]);
   }
 
   askLogout() { this.confirm.set('logout'); }
