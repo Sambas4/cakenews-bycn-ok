@@ -6,6 +6,7 @@ import { DataService } from '../services/data.service';
 import { InteractionService } from '../services/interaction.service';
 import { TranslationService } from '../services/translation.service';
 import { FeedModeService } from '../services/feed-mode.service';
+import { ReactiveFeedBufferService } from '../services/reactive-feed-buffer.service';
 import { ArticleCardComponent } from '../components/article-card.component';
 import { FeedModeSwitcherComponent } from '../components/feed-mode-switcher.component';
 import { Article } from '../types';
@@ -64,17 +65,18 @@ export class FeedViewComponent implements OnInit, OnDestroy {
   private interaction = inject(InteractionService);
   private translation = inject(TranslationService);
   private feedMode = inject(FeedModeService);
+  private buffer = inject(ReactiveFeedBufferService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
   t = this.translation.t;
   Math = Math;
 
-  // The feed is sourced from the active "lane" (Pulse / Radar / Cercle).
-  // Changing lane swaps the upstream signal — Angular re-renders only the
-  // actually-mounted cards thanks to the existing `Math.abs(...) <= 1`
-  // window in the template.
-  feedArticles = this.feedMode.feed;
+  // CakeEngine v3 — the feed pulls from a 5-slot reactive buffer that
+  // re-ranks live as the user advances. Pivots fired by the
+  // CircuitBreaker swap the unrendered tail without touching the card
+  // currently on screen.
+  feedArticles = this.buffer.visible;
 
   emptyTitle = computed(() => {
     switch (this.feedMode.mode()) {
@@ -254,9 +256,17 @@ export class FeedViewComponent implements OnInit, OnDestroy {
     }
 
     if (newIndex !== this.currentIndex) {
-        this.logCurrentDwellTime(); // L'utilisateur vient de swiper : on enregistre combien de temps il est resté
+        // 1. Capture the dwell on the article we are leaving — this is
+        //    what feeds the CircuitBreaker. Must happen *before* the
+        //    buffer slides, otherwise the timing would attach to the
+        //    next slot.
+        this.logCurrentDwellTime();
+        // 2. Slide the reactive buffer forward. If the buffer was
+        //    running thin or the breaker fired during the dwell log,
+        //    the upcoming queue is now refreshed transparently.
+        if (newIndex > this.currentIndex) this.buffer.advance();
         this.currentIndex = newIndex;
-        this.viewStartTime = Date.now(); // Reset du chrono pour le nouvel article
+        this.viewStartTime = Date.now();
         this.updateRoute();
     }
 

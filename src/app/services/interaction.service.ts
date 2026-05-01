@@ -2,6 +2,21 @@ import { Injectable, signal, inject } from '@angular/core';
 import { Category, UserLocation, UserStats } from '../types';
 import { DataService } from './data.service';
 import { PrivacyService } from './privacy.service';
+import { ReadTimeEstimatorService } from './read-time-estimator.service';
+
+/**
+ * Discrete reaction intensity for a forward navigation. Mapping:
+ *  - `flick`  : the user dismissed the card before they could have
+ *               read anything (≤ 800ms). Treat as violent rejection.
+ *  - `fast`   : skimmed the headline/cover (≤ 2 000ms). Mild rejection.
+ *  - `normal` : engaged but moved on. Neutral signal.
+ *  - `deep`   : substantial dwell relative to expected time.
+ *               Strong endorsement.
+ */
+export type SignalIntensity = 'flick' | 'fast' | 'normal' | 'deep';
+
+const FLICK_MAX_MS = 800;
+const FAST_MAX_MS = 2_000;
 
 @Injectable({
   providedIn: 'root'
@@ -15,6 +30,13 @@ export class InteractionService {
   hasCompletedOnboarding = signal<boolean>(false);
   votedVibes = signal<Record<string, string[]>>({});
 
+  /**
+   * Intensity bucket for a forward navigation. The algorithm reacts
+   * differently to each — a `flick` is a violent rejection that should
+   * push us to flush our buffer, while a `deep` is a strong endorsement.
+   */
+  // signal-intensity moved to a typed enum for clarity at call-sites.
+
   sessionHistory = signal<{
     articleId: string;
     category: string;
@@ -22,11 +44,14 @@ export class InteractionService {
     durationMs: number;
     expectedDurationMs?: number;
     completionRatio?: number;
+    /** Discrete intensity bucket — see {@link SignalIntensity}. */
+    intensity?: SignalIntensity;
     timestamp: number;
   }[]>([]);
 
   private dataService = inject(DataService);
   private privacy = inject(PrivacyService);
+  private readEstimator = inject(ReadTimeEstimatorService);
 
   userLocation = signal<UserLocation>({
     neighborhood: '',
@@ -197,23 +222,35 @@ export class InteractionService {
     const article = this.dataService.articles().find(a => a.id === articleId);
     if (!article) return;
 
-    // L'attention réelle se base sur la complétion, pas le temps absolu
-    const wordCount = article.content ? article.content.split(/\s+/).length : 50;
-    const expectedDurationMs = Math.max(wordCount * 330, 3000); // ~3 mots/sec, min 3s
-    const completionRatio = durationMs / expectedDurationMs;
+    const est = this.readEstimator.estimate(article);
+    const completionRatio = est.expectedMs > 0 ? durationMs / est.expectedMs : 0;
+    const intensity = this.classifyIntensity(durationMs, completionRatio);
 
-    this.sessionHistory.update(history => {
-       const newEvent = {
-         articleId,
-         category: article.category,
-         author: article.author,
-         durationMs,
-         expectedDurationMs,
-         completionRatio,
-         timestamp: Date.now()
-       };
-       return [...history, newEvent];
-    });
+    this.sessionHistory.update(history => [
+      ...history,
+      {
+        articleId,
+        category: article.category,
+        author: article.author,
+        durationMs,
+        expectedDurationMs: est.expectedMs,
+        completionRatio,
+        intensity,
+        timestamp: Date.now(),
+      },
+    ]);
+  }
+
+  /**
+   * Maps a raw dwell time into the intensity bucket downstream services
+   * (CircuitBreaker, ReactiveFeedBuffer) consume to decide how violently
+   * to re-strategise.
+   */
+  private classifyIntensity(durationMs: number, completionRatio: number): SignalIntensity {
+    if (durationMs <= FLICK_MAX_MS) return 'flick';
+    if (durationMs <= FAST_MAX_MS) return 'fast';
+    if (completionRatio >= 0.7) return 'deep';
+    return 'normal';
   }
 
   logComment(articleId: string) {

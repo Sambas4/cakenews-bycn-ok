@@ -46,7 +46,15 @@ export class FeedModeService {
     try { localStorage.setItem('cake_feed_mode', m); } catch { /* ignore */ }
   }
 
-  /** Active feed for the current lane. */
+  /**
+   * Active lane content. This is the *full* candidate pool for the
+   * current lane — for Pulse it's the algorithmic ranking, for Radar
+   * the chronological pipeline, for Cercle the trusted-authors slice.
+   *
+   * The reactive buffer prefers {@link inventory} over this for Pulse
+   * (it re-ranks from raw inventory minus served), but for Radar /
+   * Cercle this signal *is* the inventory.
+   */
   readonly feed = computed<Article[]>(() => {
     const all = this.data.articles();
     switch (this.mode()) {
@@ -57,28 +65,46 @@ export class FeedModeService {
     }
   });
 
+  /**
+   * Raw, unranked candidate pool for the current lane. Surfaced so
+   * downstream services (the reactive buffer in particular) can pick
+   * their own ranking strategy without going through `feed` and
+   * paying the cost of an extra ranking pass.
+   */
+  readonly inventory = computed<Article[]>(() => {
+    const all = this.data.articles().filter(a => (a.status ?? 'published') === 'published');
+    switch (this.mode()) {
+      case 'radar':  return [...all].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+      case 'cercle': return this.cercleSlice(all);
+      case 'pulse':
+      default:       return all;
+    }
+  });
+
   private radar(all: Article[]): Article[] {
     const live = all.filter(a => (a.status ?? 'published') === 'published');
     return [...live].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
   }
 
   private cercle(all: Article[]): Article[] {
+    return this.cercleSlice(all.filter(a => (a.status ?? 'published') === 'published'));
+  }
+
+  private cercleSlice(pool: Article[]): Article[] {
     const liked = new Set(this.interaction.likedArticles());
     const commented = new Set(this.interaction.commentedArticles());
     const saved = new Set(this.interaction.savedArticles());
 
-    // Authors I have engaged with at least once.
     const trustedAuthors = new Set<string>();
-    for (const a of all) {
+    for (const a of pool) {
       if (liked.has(a.id) || commented.has(a.id) || saved.has(a.id)) {
         trustedAuthors.add(a.author);
       }
     }
-
     if (trustedAuthors.size === 0) return [];
 
-    return all
-      .filter(a => (a.status ?? 'published') === 'published' && trustedAuthors.has(a.author))
+    return pool
+      .filter(a => trustedAuthors.has(a.author))
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
   }
 

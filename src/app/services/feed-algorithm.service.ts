@@ -2,6 +2,8 @@ import { inject, Injectable, untracked } from '@angular/core';
 import { Article, Category } from '../types';
 import { InteractionService } from './interaction.service';
 import { VibeSignalService } from './vibe-signal.service';
+import { CohortEngineService } from './cohort-engine.service';
+import { AutoTaggerService } from './auto-tagger.service';
 
 /**
  * # CakeNews Feed Algorithm — "Cake-FYP"
@@ -88,6 +90,8 @@ const MS_IN_HOUR = 3_600_000;
 export class FeedAlgorithmService {
   private interaction = inject(InteractionService);
   private vibeSignal = inject(VibeSignalService);
+  private cohort = inject(CohortEngineService);
+  private tagger = inject(AutoTaggerService);
 
   /**
    * Build a personalised feed batch for the current viewer.
@@ -160,11 +164,12 @@ export class FeedAlgorithmService {
       if (!a) return;
       category.set(a.category, (category.get(a.category) ?? 0) + weight);
       author.set(a.author, (author.get(a.author) ?? 0) + weight * 0.8);
-      if (a.metadata) {
-        tone.set(a.metadata.tone, (tone.get(a.metadata.tone) ?? 0) + weight * 0.6);
-        format.set(a.metadata.format, (format.get(a.metadata.format) ?? 0) + weight * 0.5);
-        complexity.set(a.metadata.complexity, (complexity.get(a.metadata.complexity) ?? 0) + weight * 0.4);
-      }
+      // Always tag — falls back to heuristics when metadata is absent
+      // so the affinity profile never leaves 40% of its scoring blind.
+      const meta = this.tagger.syncTag(a);
+      tone.set(meta.tone, (tone.get(meta.tone) ?? 0) + weight * 0.6);
+      format.set(meta.format, (format.get(meta.format) ?? 0) + weight * 0.5);
+      complexity.set(meta.complexity, (complexity.get(meta.complexity) ?? 0) + weight * 0.4);
       totalSignals += 1;
     };
 
@@ -214,6 +219,9 @@ export class FeedAlgorithmService {
     base += Math.log1p(comments) * 5;
     if (a.isExclusive) base += 6;
 
+    // Resolve effective metadata (heuristic fallback — never null).
+    const meta = this.tagger.syncTag(a);
+
     // 2. Recency — half-life of ~36h for breaking news, fading slowly.
     const ageHours = this.ageInHours(a.timestamp);
     if (ageHours <= 1) recency += 18;
@@ -234,8 +242,8 @@ export class FeedAlgorithmService {
     if (!isColdStart) {
       const catAff = p.category.get(a.category) ?? 0;
       const authAff = p.author.get(a.author) ?? 0;
-      const toneAff = a.metadata ? (p.tone.get(a.metadata.tone) ?? 0) : 0;
-      const formatAff = a.metadata ? (p.format.get(a.metadata.format) ?? 0) : 0;
+      const toneAff = p.tone.get(meta.tone) ?? 0;
+      const formatAff = p.format.get(meta.format) ?? 0;
 
       fit += Math.min(catAff, 70);
       fit += Math.min(authAff, 28) * 0.9;
@@ -264,7 +272,7 @@ export class FeedAlgorithmService {
     // 5. Novelty / horizon expansion — boost a probe if its category is
     // genuinely unseen by the viewer (great TikTok-style "let's test you").
     if (!p.knownCategories.has(a.category)) novelty += 6;
-    if (a.metadata?.format === 'Video' && !p.format.has('Video')) novelty += 4;
+    if (meta.format === 'Video' && !p.format.has('Video')) novelty += 4;
 
     // 6. Already-consumed penalties (strong but not absolute).
     const reads = this.interaction.readArticles();
@@ -293,7 +301,17 @@ export class FeedAlgorithmService {
     const qualityBoost = this.vibeSignal.qualityBoostByArticle().get(a.id) ?? 0;
     const qualityScore = Math.min(qualityBoost * 6, 12);
 
-    const total = base + fit + velocity + recency + novelty + qualityScore;
+    // Cohort weights — A/B variants and lookalike viral boost folded in.
+    const w = this.cohort.weights();
+    const viralBoost = 1 + this.cohort.viralBoostFor(a.id);
+
+    const total =
+      base
+      + fit * w.fit
+      + velocity * w.velocity * viralBoost
+      + recency * w.recency
+      + novelty * w.novelty
+      + qualityScore;
     return { article: a, base, fit, velocity, recency, novelty, total, bucket };
   }
 
@@ -388,10 +406,12 @@ export class FeedAlgorithmService {
   private dynamicEpsilon(p: AffinityProfile): number {
     // Cold start = explore aggressively; engaged user = exploit; if avg
     // completion is dropping we re-inflate exploration to break boredom.
-    if (p.totalSignals < 3) return 0.35;
-    if (p.avgCompletion > 0.65) return 0.15;
-    if (p.avgCompletion > 0.45) return 0.22;
-    return 0.30;
+    // The cohort variant tunes the baseline up or down.
+    const variantEpsilon = this.cohort.weights().exploreEpsilon;
+    if (p.totalSignals < 3) return Math.min(0.45, variantEpsilon + 0.15);
+    if (p.avgCompletion > 0.65) return Math.max(0.10, variantEpsilon - 0.07);
+    if (p.avgCompletion > 0.45) return variantEpsilon;
+    return Math.min(0.40, variantEpsilon + 0.08);
   }
 
   private ageInHours(ts: string | undefined): number {
