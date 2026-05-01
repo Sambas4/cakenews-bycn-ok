@@ -1,6 +1,7 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { Category, UserLocation, UserStats } from '../types';
 import { DataService } from './data.service';
+import { PrivacyService } from './privacy.service';
 
 @Injectable({
   providedIn: 'root'
@@ -25,6 +26,7 @@ export class InteractionService {
   }[]>([]);
 
   private dataService = inject(DataService);
+  private privacy = inject(PrivacyService);
 
   userLocation = signal<UserLocation>({
     neighborhood: '',
@@ -189,6 +191,9 @@ export class InteractionService {
   }
 
   logSessionRead(articleId: string, durationMs: number) {
+    // Private mode: no session signal ever leaves the page.
+    if (this.privacy.enabled()) return;
+
     const article = this.dataService.articles().find(a => a.id === articleId);
     if (!article) return;
 

@@ -6,6 +6,8 @@ import { DataService } from '../../services/data.service';
 import { CATEGORY_COLORS } from '../../constants';
 import type { Article, Category } from '../../types';
 import { Router } from '@angular/router';
+import { CognitiveRadarComponent } from './cognitive-radar.component';
+import { TrustTimelineComponent } from './trust-timeline.component';
 
 interface AdnSlice {
   cat: string;
@@ -20,9 +22,15 @@ interface AdnSlice {
 @Component({
   selector: 'app-profile-activity',
   standalone: true,
-  imports: [CommonModule, LucideAngularModule],
+  imports: [CommonModule, LucideAngularModule, CognitiveRadarComponent, TrustTimelineComponent],
   template: `
     <div class="space-y-6 animate-[slideUp_0.25s_ease-out]">
+
+      <!-- Cognitive radar (premium) -->
+      <app-cognitive-radar></app-cognitive-radar>
+
+      <!-- Trust ledger -->
+      <app-trust-timeline></app-trust-timeline>
 
       <!-- ADN Reader -->
       <section class="bg-white/[0.03] border border-white/[0.06] rounded-3xl p-5 relative overflow-hidden">

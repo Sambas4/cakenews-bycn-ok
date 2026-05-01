@@ -1,6 +1,7 @@
 import { inject, Injectable, untracked } from '@angular/core';
 import { Article, Category } from '../types';
 import { InteractionService } from './interaction.service';
+import { VibeSignalService } from './vibe-signal.service';
 
 /**
  * # CakeNews Feed Algorithm — "Cake-FYP"
@@ -86,6 +87,7 @@ const MS_IN_HOUR = 3_600_000;
 @Injectable({ providedIn: 'root' })
 export class FeedAlgorithmService {
   private interaction = inject(InteractionService);
+  private vibeSignal = inject(VibeSignalService);
 
   /**
    * Build a personalised feed batch for the current viewer.
@@ -284,7 +286,14 @@ export class FeedAlgorithmService {
     // viewer has previously engaged with it. Avoids surprise NSFW.
     if (a.isSensitive && !this.hasSensitiveAffinity(a, p)) base -= 35;
 
-    const total = base + fit + velocity + recency + novelty;
+    // 9. Vibe-driven editorial quality boost. Articles where the
+    // community has massively voted "Validé" get a small extra push.
+    // Capped on purpose — the algorithm should not become a popularity
+    // contest for the most validated piece of the day.
+    const qualityBoost = this.vibeSignal.qualityBoostByArticle().get(a.id) ?? 0;
+    const qualityScore = Math.min(qualityBoost * 6, 12);
+
+    const total = base + fit + velocity + recency + novelty + qualityScore;
     return { article: a, base, fit, velocity, recency, novelty, total, bucket };
   }
 

@@ -5,23 +5,23 @@ import { LucideAngularModule } from 'lucide-angular';
 import { DataService } from '../services/data.service';
 import { InteractionService } from '../services/interaction.service';
 import { TranslationService } from '../services/translation.service';
-import { FeedAlgorithmService } from '../services/feed-algorithm.service';
+import { FeedModeService } from '../services/feed-mode.service';
 import { ArticleCardComponent } from '../components/article-card.component';
-import { Article, Category } from '../types';
-import { THEME_GROUPS, CATEGORY_COLORS } from '../constants';
+import { FeedModeSwitcherComponent } from '../components/feed-mode-switcher.component';
+import { Article } from '../types';
 import { filter } from 'rxjs/operators';
 
 @Component({
   selector: 'app-feed-view',
   standalone: true,
-  imports: [CommonModule, LucideAngularModule, ArticleCardComponent],
+  imports: [CommonModule, LucideAngularModule, ArticleCardComponent, FeedModeSwitcherComponent],
   template: `
+    <app-feed-mode-switcher></app-feed-mode-switcher>
     @if (articles().length === 0) {
-      <div class="w-full h-full bg-black relative z-[200] flex items-center justify-center">
-        <div class="text-white/50 text-center">
-          <lucide-icon name="archive" class="w-16 h-16 mb-4 opacity-50 mx-auto"></lucide-icon>
-          <p class="text-sm font-bold uppercase tracking-widest">Aucun article disponible</p>
-        </div>
+      <div class="w-full h-full bg-black relative z-[200] flex flex-col items-center justify-center px-8 text-center">
+        <lucide-icon name="archive" class="w-12 h-12 mb-4 text-white/30"></lucide-icon>
+        <p class="text-[12px] font-black uppercase tracking-[0.2em] text-white/50">{{ emptyTitle() }}</p>
+        <p class="text-[11.5px] text-white/40 mt-2 max-w-[280px] leading-snug">{{ emptyHint() }}</p>
       </div>
     } @else {
       <div 
@@ -63,19 +63,33 @@ export class FeedViewComponent implements OnInit, OnDestroy {
   private dataService = inject(DataService);
   private interaction = inject(InteractionService);
   private translation = inject(TranslationService);
-  private feedAlgorithm = inject(FeedAlgorithmService);
+  private feedMode = inject(FeedModeService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
   t = this.translation.t;
   Math = Math;
 
-  // The feed is recomputed when the underlying article inventory changes.
-  // The algorithm itself reads engagement signals via `untracked()` so a
-  // single like / scroll does not re-shuffle the order under the user.
-  feedArticles = computed(() => {
-    const allArticles = this.dataService.articles();
-    return this.feedAlgorithm.generate(allArticles);
+  // The feed is sourced from the active "lane" (Pulse / Radar / Cercle).
+  // Changing lane swaps the upstream signal — Angular re-renders only the
+  // actually-mounted cards thanks to the existing `Math.abs(...) <= 1`
+  // window in the template.
+  feedArticles = this.feedMode.feed;
+
+  emptyTitle = computed(() => {
+    switch (this.feedMode.mode()) {
+      case 'cercle': return 'Ton Cercle est vide';
+      case 'radar':  return 'Aucun breaking en direct';
+      default:       return 'Aucun article disponible';
+    }
+  });
+
+  emptyHint = computed(() => {
+    switch (this.feedMode.mode()) {
+      case 'cercle': return 'Like, commente ou sauve un article pour qu\'il rejoigne ton Cercle.';
+      case 'radar':  return 'Quand l\'actualité bouge, le Radar la pousse ici en temps réel.';
+      default:       return 'Reviens dans un instant, l\'antenne s\'allume.';
+    }
   });
   
   articles = this.feedArticles;

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { LucideAngularModule } from 'lucide-angular';
 import { InteractionService } from '../../services/interaction.service';
 import { TranslationService } from '../../services/translation.service';
+import { PrivacyService } from '../../services/privacy.service';
 import { CATEGORY_COLORS, THEME_GROUPS } from '../../constants';
 import type { Category } from '../../types';
 
@@ -79,6 +80,29 @@ const GROUP_META: Record<string, { label: string; icon: string }> = {
               <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
                 [ngClass]="prefs().showActivity ? 'left-[18px]' : 'left-0.5'"></span>
             </button>
+          </div>
+
+          <!-- Privacy / amnesic mode -->
+          <div class="px-4 py-3.5 border-b border-white/[0.04]">
+            <label class="flex items-center justify-between cursor-pointer">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-8 h-8 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0">
+                  <lucide-icon name="shield" class="w-4 h-4 text-emerald-300"></lucide-icon>
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-[13px] font-bold text-white">Mode privé</span>
+                  <span class="text-[10.5px] text-zinc-500 leading-snug">
+                    Aucune session enregistrée, l'algorithme reste à distance
+                  </span>
+                </div>
+              </div>
+              <button type="button" (click)="privacy.toggle(); $event.preventDefault()"
+                class="relative w-10 h-6 rounded-full transition-colors shrink-0"
+                [ngClass]="privacy.enabled() ? 'bg-emerald-500' : 'bg-white/10'">
+                <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+                  [ngClass]="privacy.enabled() ? 'left-[18px]' : 'left-0.5'"></span>
+              </button>
+            </label>
           </div>
 
           <div class="px-4 py-3.5">
@@ -213,6 +237,7 @@ export class ProfileSettingsComponent {
 
   private interaction = inject(InteractionService);
   private translation = inject(TranslationService);
+  protected privacy = inject(PrivacyService);
 
   readonly showSensitive = signal(false);
 
