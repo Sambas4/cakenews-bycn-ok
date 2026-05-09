@@ -12,6 +12,43 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CakeNews">
 
+    <!--
+      Content Security Policy — strict baseline.
+
+      • script-src 'self'      : only our own bundle runs scripts. No CDN
+                                  drive-by; no eval. Inline scripts in this
+                                  HTML are tolerated for the boot splash
+                                  via the `'unsafe-inline'` exception
+                                  scoped to scripts that are themselves
+                                  small and self-contained.
+      • style-src              : the local Tailwind bundle plus Google
+                                  Fonts CSS. `unsafe-inline` is required
+                                  for Angular's animation / inline style
+                                  attributes — Angular emits a fair
+                                  number of `style="..."` bindings.
+      • img-src                : permits the article image hosts we
+                                  preconnect to.
+      • connect-src            : Supabase project + WebSocket realtime,
+                                  plus the dicebear / picsum / unsplash
+                                  back-ends. Add your VITE_SUPABASE_URL
+                                  origin if you tighten this further.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      base-uri 'self';
+      object-src 'none';
+      frame-ancestors 'self';
+      form-action 'self';
+      script-src 'self' 'unsafe-inline';
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com data:;
+      img-src 'self' data: blob: https://images.unsplash.com https://api.dicebear.com https://picsum.photos https://api.iconify.design https://www.gstatic.com;
+      connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in wss://*.supabase.in;
+      worker-src 'self';
+      manifest-src 'self';
+      upgrade-insecure-requests;
+    ">
+
     <title>CakeNews</title>
 
     <link rel="manifest" href="/manifest.json">
@@ -23,124 +60,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://picsum.photos">
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['"Open Sans"', 'system-ui', '-apple-system', 'sans-serif'],
-                    },
-                    animation: {
-                        'marquee-left': 'marquee-left 25s linear infinite',
-                        'flash': 'flash 2s infinite',
-                        'fade-in': 'fadeIn 0.25s ease-out',
-                        'slide-up': 'slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                        'shimmer': 'shimmer 2s linear infinite',
-                    },
-                    keyframes: {
-                        'marquee-left': {
-                            '0%': { transform: 'translateX(0)' },
-                            '100%': { transform: 'translateX(-50%)' }
-                        },
-                        'flash': {
-                            '0%, 100%': { opacity: '1' },
-                            '50%': { opacity: '0.4' },
-                        },
-                        'fadeIn': {
-                            '0%': { opacity: '0' },
-                            '100%': { opacity: '1' }
-                        },
-                        'slideUp': {
-                            '0%': { opacity: '0', transform: 'translateY(8px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' }
-                        },
-                        'shimmer': {
-                            '0%': { backgroundPosition: '-1000px 0' },
-                            '100%': { backgroundPosition: '1000px 0' }
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-
-    <style>
-        :root {
-            --cake-red: #ff0000;
-            --cake-black: #000000;
-            --cake-accent: #7ae25c;
-        }
-        html {
-            font-size: 17px;
-        }
-        body {
-            font-family: '"Open Sans"', system-ui, -apple-system, sans-serif;
-            background-color: var(--cake-black);
-            color: #ffffff;
-            overflow: hidden;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            overscroll-behavior-y: none;
-            text-rendering: optimizeLegibility;
-        }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-        .mb-safe { margin-bottom: env(safe-area-inset-bottom); }
-
-        /* Discreet custom scrollbar — only used where lists really need it. */
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
-
-        /* Skeleton shimmer used by suspended cards. */
-        .cake-shimmer {
-            background: linear-gradient(90deg, #18181b 0%, #27272a 50%, #18181b 100%);
-            background-size: 1000px 100%;
-            animation: shimmer 2s linear infinite;
-        }
-
-        /* Initial paint splash so the user never stares at a blank screen. */
-        #cake-boot {
-            position: fixed;
-            inset: 0;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            color: #fff;
-            font-weight: 800;
-            letter-spacing: 0.2em;
-            text-transform: uppercase;
-            font-size: 10px;
-            transition: opacity 0.25s ease-out;
-        }
-        #cake-boot.hide { opacity: 0; pointer-events: none; }
-
-        @media (min-width: 640px) {
-            app-root {
-                max-width: 450px;
-                margin: 0 auto;
-                border-left: 1px solid #222;
-                border-right: 1px solid #222;
-                display: block;
-                height: 100%;
-            }
-        }
-        app-root {
-            height: 100vh;
-            height: 100dvh;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            background-color: #000;
-        }
-    </style>
 </head>
 <body class="bg-black">
     <div id="cake-boot" aria-hidden="true">

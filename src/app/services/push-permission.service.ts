@@ -1,5 +1,7 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { Logger } from './logger.service';
+import { SupabaseService } from './supabase.service';
+import { AuthService } from './auth.service';
 
 export type PushStatus = 'unsupported' | 'default' | 'granted' | 'denied';
 
@@ -16,14 +18,45 @@ export type PushStatus = 'unsupported' | 'default' | 'granted' | 'denied';
  *    a deployment without a configured Edge Function still gets the
  *    permission UX without crashing on `applicationServerKey`.
  */
+/**
+ * Read the build-time VAPID public key. We treat the empty string as
+ * "push is not configured for this deployment" so the rest of the
+ * code stays graceful in dev environments.
+ */
+function readVapidKey(): string {
+  try {
+    const v = (import.meta as { env?: Record<string, string> }).env?.['VITE_VAPID_PUBLIC_KEY'];
+    return typeof v === 'string' ? v.trim() : '';
+  } catch { return ''; }
+}
+
 @Injectable({ providedIn: 'root' })
 export class PushPermissionService {
   private logger = inject(Logger);
+  private supabase = inject(SupabaseService);
+  private auth = inject(AuthService);
+
+  private readonly vapidKey = readVapidKey();
+  private autoSubscribeAttempted = false;
 
   /** Current notification permission as a typed signal. */
   readonly status = signal<PushStatus>(this.detect());
 
   readonly canPrompt = computed(() => this.status() === 'default');
+
+  constructor() {
+    // When permission is `granted` and the viewer is signed in, keep
+    // a Supabase subscription row registered for this device. Idempotent
+    // — safe to fire repeatedly (subscribe() returns the existing sub
+    // if one is already in place).
+    effect(() => {
+      const status = this.status();
+      const user = this.auth.currentUser();
+      if (status !== 'granted' || !user || this.autoSubscribeAttempted) return;
+      this.autoSubscribeAttempted = true;
+      void this.persistSubscription(user.id);
+    });
+  }
 
   /** Best-effort request flow. Returns the resolved status. */
   async request(): Promise<PushStatus> {
@@ -36,6 +69,14 @@ export class PushPermissionService {
       const result = await Notification.requestPermission();
       const next = this.normalise(result);
       this.status.set(next);
+      // If the user just granted permission, eagerly persist the
+      // subscription rather than waiting for the auth effect to
+      // re-fire on a future cycle.
+      const uid = this.auth.currentUser()?.id;
+      if (next === 'granted' && uid) {
+        this.autoSubscribeAttempted = true;
+        void this.persistSubscription(uid);
+      }
       return next;
     } catch (e) {
       this.logger.warn('push permission request failed', e);
@@ -76,9 +117,46 @@ export class PushPermissionService {
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
-      if (sub) await sub.unsubscribe();
+      if (sub) {
+        await sub.unsubscribe();
+        // Best-effort prune of the server-side row. We `delete` by
+        // endpoint instead of by user_uid so we never wipe other
+        // devices the user may have authorised on the same account.
+        await this.supabase.client.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+      }
     } catch (e) {
       this.logger.warn('push unsubscribe failed', e);
+    }
+  }
+
+  /**
+   * Persist the device's PushSubscription into Supabase so the
+   * `send-push` Edge Function can reach this user. Called automatically
+   * on login when permission is already `granted`. Idempotent.
+   */
+  private async persistSubscription(uid: string): Promise<void> {
+    if (!this.vapidKey) return;                     // deployment without push
+    const sub = await this.subscribe(this.vapidKey);
+    if (!sub) return;
+    const json = sub.toJSON();
+    const endpoint = json.endpoint;
+    const p256dh = json.keys?.['p256dh'];
+    const auth = json.keys?.['auth'];
+    if (!endpoint || !p256dh || !auth) return;
+
+    try {
+      await this.supabase.client.from('push_subscriptions').upsert(
+        {
+          user_uid: uid,
+          endpoint,
+          p256dh,
+          auth,
+          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        },
+        { onConflict: 'user_uid,endpoint' }
+      );
+    } catch (e) {
+      this.logger.warn('push subscription persist failed', e);
     }
   }
 

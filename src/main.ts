@@ -2,6 +2,10 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { AppComponent } from './app/app.component';
 import { provideRouter, withInMemoryScrolling, withRouterConfig } from '@angular/router';
 import { ErrorHandler, provideZonelessChangeDetection } from '@angular/core';
+
+// Tailwind + base styles are compiled locally now (no more cdn.tailwindcss.com)
+// so the production binary can ship under a strict CSP.
+import './styles.css';
 import {
   LUCIDE_ICONS, LucideIconProvider,
   Loader, Sparkles, History, MoreHorizontal, MoreVertical, Award, Leaf, X, Zap, Activity,

@@ -4,6 +4,7 @@ import { LucideAngularModule } from 'lucide-angular';
 import { InteractionService } from '../../services/interaction.service';
 import { TranslationService } from '../../services/translation.service';
 import { PrivacyService } from '../../services/privacy.service';
+import { DataExportService } from '../../services/data-export.service';
 import { CATEGORY_COLORS, THEME_GROUPS } from '../../constants';
 import type { Category } from '../../types';
 
@@ -218,6 +219,11 @@ const GROUP_META: Record<string, { label: string; icon: string }> = {
       <section class="pt-4">
         <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">Compte</h3>
         <div class="space-y-2 mb-safe">
+          <button type="button" (click)="exportData()" [disabled]="dataExport.busy()"
+            class="w-full bg-white/[0.03] border border-white/[0.06] text-zinc-300 font-black uppercase tracking-widest text-[10px] py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-white/[0.06] transition-colors disabled:opacity-50">
+            <lucide-icon [name]="dataExport.busy() ? 'loader' : 'download'" class="w-3.5 h-3.5" [class.animate-spin]="dataExport.busy()"></lucide-icon>
+            Exporter mes données (RGPD)
+          </button>
           <button type="button" (click)="logout.emit()"
             class="w-full bg-white/[0.03] border border-white/[0.06] text-zinc-300 font-black uppercase tracking-widest text-[10px] py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-white/[0.06] transition-colors">
             <lucide-icon name="log-out" class="w-3.5 h-3.5"></lucide-icon> Se déconnecter
@@ -238,6 +244,11 @@ export class ProfileSettingsComponent {
   private interaction = inject(InteractionService);
   private translation = inject(TranslationService);
   protected privacy = inject(PrivacyService);
+  protected dataExport = inject(DataExportService);
+
+  exportData(): void {
+    void this.dataExport.download();
+  }
 
   readonly showSensitive = signal(false);
 

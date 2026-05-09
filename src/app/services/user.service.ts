@@ -1,12 +1,14 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { SupabaseService } from './supabase.service';
 import { UserProfile, PublicProfile } from '../types';
+import { AuditLogService } from './audit-log.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class UserService {
   private supabaseService = inject(SupabaseService);
+  private audit = inject(AuditLogService);
 
   currentUserProfile = signal<UserProfile | null>(null);
   currentPublicProfile = signal<PublicProfile | null>(null);
@@ -119,7 +121,23 @@ export class UserService {
         if (current && current.uid === uid) return { ...current, ...data };
         return current;
       });
-    } catch(e: any) {
+
+      // Privileged actions leave a trail. Role / status changes are
+      // the high-impact ones — audit them with the before/after value
+      // so we can answer "who promoted whom and when?".
+      if (data.role !== undefined || data.status !== undefined) {
+        void this.audit.record({
+          action: data.role !== undefined ? 'user.role.update' : 'user.status.update',
+          targetType: 'USER',
+          targetId: uid,
+          payload: {
+            role: data.role,
+            status: data.status,
+            moderationNote: data.moderationNote,
+          },
+        });
+      }
+    } catch (e) {
       console.error('Error updating user profile:', e);
     }
   }

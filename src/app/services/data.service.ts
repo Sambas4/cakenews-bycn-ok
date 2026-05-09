@@ -7,6 +7,8 @@ import { ImagePrefetchService } from './image-prefetch.service';
 import { NetworkStatusService } from './network-status.service';
 import { Logger } from './logger.service';
 import { ARTICLE_API, IArticleApi, VibeKind } from './api/article-api';
+import { ArticlePaginationService } from './article-pagination.service';
+import { AuditLogService } from './audit-log.service';
 
 const OFFLINE_CACHE_SIZE = 8;
 /** Backoff schedule in ms for realtime reconnection attempts. */
@@ -49,6 +51,8 @@ export class DataService {
   private network = inject(NetworkStatusService);
   private logger = inject(Logger);
   private api = inject<IArticleApi>(ARTICLE_API);
+  private pagination = inject(ArticlePaginationService);
+  private audit = inject(AuditLogService);
 
   private unsubscribe: (() => void) | null = null;
   private reconnectAttempt = 0;
@@ -149,7 +153,35 @@ export class DataService {
     this.hasFreshData.set(true);
     this.offline.store(sorted.slice(0, OFFLINE_CACHE_SIZE), OFFLINE_CACHE_SIZE);
     this.imagePrefetch.precache(sorted.slice(0, OFFLINE_CACHE_SIZE).map(a => a.imageUrl).filter(Boolean));
+    // Position the pagination cursor so subsequent `loadMore()` calls
+    // pick up where the realtime head left off, without loading the
+    // first batch twice.
+    this.pagination.primeFromHead(sorted);
   }
+
+  /**
+   * Append the next page of older articles to the in-memory list.
+   * No-op while a request is already in flight or the cursor is
+   * exhausted. Useful for the feed view's "scroll to load older
+   * stories" behaviour and the search view's deep browse.
+   */
+  async loadMore(): Promise<number> {
+    const more = await this.pagination.loadMore();
+    if (more.length === 0) return 0;
+    // Dedupe — the realtime subscription may have already inserted
+    // some of these rows.
+    this.articles.update(curr => {
+      const known = new Set(curr.map(a => a.id));
+      const additions = more.filter(a => !known.has(a.id));
+      return [...curr, ...additions]
+        .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+    });
+    return more.length;
+  }
+
+  /** Pagination state surface for the UI. */
+  paginationLoading   = this.pagination.loading;
+  paginationExhausted = this.pagination.exhausted;
 
   // ---------------------------------------------------------------
   // Reads
@@ -169,8 +201,18 @@ export class DataService {
   }
 
   async deleteArticle(articleId: string): Promise<void> {
-    try { await this.api.delete(articleId); }
-    catch (e) { this.logger.error('deleteArticle failed', e); }
+    try {
+      await this.api.delete(articleId);
+      // Privileged action — leave a trail so we can answer "who
+      // killed that article and when?" months later.
+      await this.audit.record({
+        action: 'article.delete',
+        targetType: 'ARTICLE',
+        targetId: articleId,
+      });
+    } catch (e) {
+      this.logger.error('deleteArticle failed', e);
+    }
   }
 
   /**

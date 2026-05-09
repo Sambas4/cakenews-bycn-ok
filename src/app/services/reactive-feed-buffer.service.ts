@@ -118,7 +118,25 @@ export class ReactiveFeedBufferService {
     // If the queue is getting thin, top it up *without* clearing what
     // is already staged — this is a soft refill, not a pivot.
     if (rest.length <= MIN_DEPTH_BEFORE_REFILL) {
-      const refill = this.rank(served, rest);
+      let refill = this.rank(served, rest);
+
+      // If there is nothing left to rank locally, ask the API for the
+      // next page of older articles. The data service will append them
+      // to the inventory; we re-rank against that fresh inventory.
+      if (refill.length === 0 && !this.data.paginationExhausted()) {
+        void this.data.loadMore().then(loaded => {
+          if (loaded === 0) return;
+          // Re-rank against the now-larger inventory and append.
+          const more = this.rank(this.state().served, this.state().upcoming);
+          if (more.length > 0) {
+            this.state.update(curr => ({
+              ...curr,
+              upcoming: [...curr.upcoming, ...more],
+            }));
+          }
+        });
+      }
+
       this.state.set({
         ...s,
         served,
