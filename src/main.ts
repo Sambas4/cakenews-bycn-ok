@@ -20,6 +20,8 @@ import {
 
 import { routes } from './app/app.routes';
 import { GlobalErrorHandler } from './app/services/error-handler.service';
+import { ARTICLE_API } from './app/services/api/article-api';
+import { SupabaseArticleApi } from './app/services/api/supabase-article-api';
 
 bootstrapApplication(AppComponent, {
   providers: [
@@ -30,6 +32,9 @@ bootstrapApplication(AppComponent, {
       withRouterConfig({ paramsInheritanceStrategy: 'always' })
     ),
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
+    // Default IArticleApi implementation. Tests / dev environments can
+    // override this token with InMemoryArticleApi via TestBed.
+    { provide: ARTICLE_API, useExisting: SupabaseArticleApi },
     {
       provide: LUCIDE_ICONS,
       multi: true,
