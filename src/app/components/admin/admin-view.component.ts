@@ -22,6 +22,7 @@ import { AdminStudioComponent } from "./admin-studio.component";
 import { AdminUsersComponent } from "./admin-users.component";
 import { AdminAuditComponent } from "./admin-audit.component";
 import { AdminCounterBriefsComponent } from "./admin-counter-briefs.component";
+import { AdminStatusBadgeComponent } from "./admin-status-badge.component";
 import { AdminAntenneComponent } from "./admin-antenne.component";
 import { AdminLocalisationComponent } from "./admin-localisation.component";
 import { DataService } from "../../services/data.service";
@@ -43,6 +44,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
     AdminAntenneComponent,
     AdminLocalisationComponent,
     AdminCounterBriefsComponent,
+    AdminStatusBadgeComponent,
   ],
   template: `
     <div
@@ -164,12 +166,15 @@ import { RealtimeChannel } from '@supabase/supabase-js';
             }}
           </span>
         </div>
-        <button
-          (click)="handleLogout()"
-          class="text-xs font-black bg-zinc-900 px-3 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-        >
-          {{ t()("ADMIN_LOGOUT") }}
-        </button>
+        <div class="flex items-center gap-2">
+          <app-admin-status-badge></app-admin-status-badge>
+          <button
+            (click)="handleLogout()"
+            class="text-xs font-black bg-zinc-900 px-3 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+          >
+            {{ t()("ADMIN_LOGOUT") }}
+          </button>
+        </div>
       </div>
 
       <!-- Main Content Area -->

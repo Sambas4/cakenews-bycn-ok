@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Capacitor — native folders are generated per-maintainer via `cap add`.
+# The shared bits (capacitor.config.ts, plugins) are committed; the
+# Xcode workspace and Gradle wrapper are not.
+ios/
+android/
+
+# Local CI artefacts
+coverage/
+*.tsbuildinfo
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

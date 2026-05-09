@@ -27,6 +27,19 @@ import { GlobalErrorHandler } from './app/services/error-handler.service';
 import { ARTICLE_API } from './app/services/api/article-api';
 import { SupabaseArticleApi } from './app/services/api/supabase-article-api';
 
+// Surface the build-time Sentry DSN to the SentryBindingService, which
+// reads it lazily once the user accepts analytics consent. Setting the
+// global before bootstrap keeps the binding service free of build-time
+// env-var coupling — runtime overrides via a deployment config endpoint
+// stay possible.
+declare global { interface Window { __cakeSentryDsn?: string } }
+{
+  const dsn = (import.meta as { env?: Record<string, string> }).env?.['VITE_SENTRY_DSN'];
+  if (typeof dsn === 'string' && dsn.trim().length > 0) {
+    window.__cakeSentryDsn = dsn.trim();
+  }
+}
+
 bootstrapApplication(AppComponent, {
   providers: [
     provideZonelessChangeDetection(),

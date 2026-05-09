@@ -1,4 +1,4 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, effect, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
@@ -8,6 +8,8 @@ import { GlobalModalRegistryComponent } from './components/global-modal-registry
 import { EmailVerificationBannerComponent } from './components/email-verification-banner.component';
 import { AuthService } from './services/auth.service';
 import { MotionPreferenceService } from './services/motion-preference.service';
+import { SentryBindingService } from './services/sentry-binding.service';
+import { ConsentService } from './services/consent.service';
 
 @Component({
   selector: 'app-root',
@@ -61,9 +63,24 @@ export class AppComponent implements OnInit {
   // Eager inject so the constructor wires the prefers-reduced-motion
   // listener and applies the resolved CSS class on the very first paint.
   private motion = inject(MotionPreferenceService);
-  
+  private sentry = inject(SentryBindingService);
+  private consent = inject(ConsentService);
+
   showBottomNav = false;
   showTicker = false;
+
+  constructor() {
+    // Wire Sentry as soon as the user accepts analytics consent (or
+    // immediately if they had accepted in a previous session). The
+    // service no-ops without a DSN, so this is safe in dev too.
+    effect(() => {
+      if (this.consent.analyticsAllowed()) {
+        void this.sentry.connect();
+      } else {
+        this.sentry.disconnect();
+      }
+    });
+  }
 
   ngOnInit() {
     // Check initial URL without waiting for event
