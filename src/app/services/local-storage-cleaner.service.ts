@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { CommentService } from './comment.service';
 
 /**
  * Keys that belong to the *currently logged-in viewer* and must be
@@ -31,16 +32,21 @@ const USER_SCOPED_KEYS = [
 ] as const;
 
 /**
- * Owns the lifecycle of user-scoped local storage. Centralised so the
- * AuthService doesn't need to know the full key surface — and so a new
- * persisted feature only needs to register its key here once.
+ * Owns the lifecycle of user-scoped local storage AND the in-memory
+ * caches we never want to bleed across users. Centralised so the
+ * AuthService doesn't need to know the full key surface — and so a
+ * new persisted feature only needs to register its key here once.
  */
 @Injectable({ providedIn: 'root' })
 export class LocalStorageCleanerService {
-  /** Wipe every user-scoped key. Safe to call multiple times. */
+  private comments = inject(CommentService);
+
+  /** Wipe every user-scoped key + in-memory cache. Safe to call repeatedly. */
   purgeUserScope(): void {
     for (const key of USER_SCOPED_KEYS) {
       try { localStorage.removeItem(key); } catch { /* ignore */ }
     }
+    // In-memory caches that hold per-user content.
+    this.comments.clearAll();
   }
 }
