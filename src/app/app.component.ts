@@ -6,6 +6,7 @@ import { BottomNavComponent } from './components/bottom-nav.component';
 import { VibeTickerComponent } from './components/ui/vibe-ticker.component';
 import { GlobalModalRegistryComponent } from './components/global-modal-registry.component';
 import { AuthService } from './services/auth.service';
+import { MotionPreferenceService } from './services/motion-preference.service';
 
 @Component({
   selector: 'app-root',
@@ -49,6 +50,9 @@ import { AuthService } from './services/auth.service';
 export class AppComponent implements OnInit {
   private router = inject(Router);
   authService = inject(AuthService);
+  // Eager inject so the constructor wires the prefers-reduced-motion
+  // listener and applies the resolved CSS class on the very first paint.
+  private motion = inject(MotionPreferenceService);
   
   showBottomNav = false;
   showTicker = false;

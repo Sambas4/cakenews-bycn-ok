@@ -6,6 +6,7 @@ import { UserService } from '../../services/user.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 import { Logger } from '../../services/logger.service';
+import { FocusTrapDirective } from '../../directives/focus-trap.directive';
 
 const AVATAR_BG = ['#7ae25c', '#F9A8D4', '#C4B5FD', '#93C5FD', '#FDE047', '#FDBA74', '#F472B6', '#FB7185'];
 const AVATAR_SEEDS = [
@@ -21,11 +22,12 @@ const AVATAR_SEEDS = [
 @Component({
   selector: 'app-profile-edit',
   standalone: true,
-  imports: [CommonModule, FormsModule, LucideAngularModule],
+  imports: [CommonModule, FormsModule, LucideAngularModule, FocusTrapDirective],
   template: `
     <div class="fixed inset-0 z-[1100] bg-black/70 backdrop-blur-sm animate-[fadeIn_0.15s_ease-out] flex items-end sm:items-center justify-center" (click)="onBackdrop($event)">
       <div class="w-full max-w-[450px] bg-zinc-950 border-t sm:border border-white/10 sm:rounded-3xl rounded-t-3xl flex flex-col max-h-[92vh] overflow-hidden animate-[slideUp_0.25s_ease-out]"
-           role="dialog" aria-modal="true" aria-label="Édition du profil">
+           role="dialog" aria-modal="true" aria-label="Édition du profil"
+           appFocusTrap (escape)="close.emit()">
         <!-- Header -->
         <header class="flex items-center justify-between px-5 h-14 border-b border-white/[0.06] shrink-0">
           <button type="button" (click)="close.emit()" class="text-zinc-400 hover:text-white p-2 -ml-2 rounded-full hover:bg-white/5 transition-colors">

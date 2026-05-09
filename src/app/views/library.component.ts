@@ -6,6 +6,7 @@ import { InteractionService } from '../services/interaction.service';
 import { DataService } from '../services/data.service';
 import type { Article } from '../types';
 import { CATEGORY_COLORS } from '../constants';
+import { ImagePerf } from '../services/image-perf.service';
 
 type LibraryKind = 'saved' | 'history' | 'likes';
 
@@ -87,7 +88,7 @@ const KINDS: Record<LibraryKind, KindMeta> = {
                 <button type="button" (click)="open(article.id)"
                   class="w-full flex gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] active:scale-[0.99] transition-all text-left">
                   <div class="w-20 h-20 rounded-xl overflow-hidden bg-zinc-900 shrink-0 relative">
-                    <img [src]="article.imageUrl" alt="" referrerpolicy="no-referrer" loading="lazy"
+                    <img [src]="thumb(article.imageUrl)" [srcset]="thumbSet(article.imageUrl)" sizes="80px" alt="" referrerpolicy="no-referrer" loading="lazy"
                       class="w-full h-full object-cover" />
                     <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
                   </div>
@@ -122,6 +123,17 @@ export class LibraryViewComponent {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private location = inject(Location);
+  private imagePerf = inject(ImagePerf);
+
+  /** CDN-optimised URL for the 80px thumbnail. */
+  thumb(url: string | undefined): string {
+    return this.imagePerf.optimised(url, 80, { quality: 65 });
+  }
+
+  /** Responsive `srcset` so retina screens get a sharper variant. */
+  thumbSet(url: string | undefined): string {
+    return this.imagePerf.srcset(url, [80, 160, 240]);
+  }
 
   readonly kind = signal<LibraryKind>(this.parseKind(this.route.snapshot.paramMap.get('kind')));
   readonly meta = computed(() => KINDS[this.kind()]);

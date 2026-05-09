@@ -8,6 +8,7 @@ import type { Article, Category } from '../../types';
 import { Router } from '@angular/router';
 import { CognitiveRadarComponent } from './cognitive-radar.component';
 import { TrustTimelineComponent } from './trust-timeline.component';
+import { ImagePerf } from '../../services/image-perf.service';
 
 interface AdnSlice {
   cat: string;
@@ -139,7 +140,9 @@ interface AdnSlice {
               <button (click)="openArticle(article.id)" type="button"
                 class="shrink-0 w-[140px] rounded-2xl overflow-hidden border border-white/[0.06] bg-zinc-900/40 hover:border-white/15 transition-colors active:scale-[0.98]">
                 <div class="aspect-[4/3] bg-zinc-900 relative">
-                  <img [src]="article.imageUrl" alt="" referrerpolicy="no-referrer" loading="lazy" class="w-full h-full object-cover" />
+                  <img [src]="thumb(article.imageUrl)" [srcset]="thumbSet(article.imageUrl)" sizes="140px"
+                    alt="" referrerpolicy="no-referrer" loading="lazy"
+                    class="w-full h-full object-cover" />
                   <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
                   <span class="absolute bottom-2 left-2 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-white text-black">
                     {{ article.category }}
@@ -165,6 +168,14 @@ export class ProfileActivityComponent {
   private interaction = inject(InteractionService);
   private dataService = inject(DataService);
   private router = inject(Router);
+  private imagePerf = inject(ImagePerf);
+
+  thumb(url: string | undefined): string {
+    return this.imagePerf.optimised(url, 140, { quality: 70 });
+  }
+  thumbSet(url: string | undefined): string {
+    return this.imagePerf.srcset(url, [140, 280, 420]);
+  }
 
   savedCount = computed(() => this.interaction.savedArticles().length);
   readCount = computed(() => this.interaction.readArticles().length);

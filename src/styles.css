@@ -95,3 +95,32 @@ app-root {
   position: relative;
   background-color: #000;
 }
+
+/*
+ * Reduced-motion override.
+ *
+ * Triggered by either the OS-level `prefers-reduced-motion` media query
+ * or the in-app accessibility toggle (mirrored onto <html> by
+ * MotionPreferenceService). We zero animation/transition durations
+ * rather than `animation: none` so completion-aware code (callbacks,
+ * onTransitionEnd) keeps firing — only the visual sweep is removed.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html.cake-reduce-motion *,
+html.cake-reduce-motion *::before,
+html.cake-reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

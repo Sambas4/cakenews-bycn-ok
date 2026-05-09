@@ -13,9 +13,11 @@ import { ToastService } from '../services/toast.service';
   standalone: true,
   imports: [CommonModule, LucideAngularModule],
   template: `
-    <div class="pointer-events-none fixed left-0 right-0 bottom-[calc(72px+env(safe-area-inset-bottom))] z-[1100] flex flex-col items-center gap-2 px-3">
+    <div role="status" aria-live="polite" aria-atomic="false"
+         class="pointer-events-none fixed left-0 right-0 bottom-[calc(72px+env(safe-area-inset-bottom))] z-[1100] flex flex-col items-center gap-2 px-3">
       @for (t of toastSvc.toasts(); track t.id) {
         <div
+          [attr.role]="t.type === 'error' || t.type === 'warning' ? 'alert' : 'status'"
           class="pointer-events-auto max-w-[420px] w-full flex items-center gap-3 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-2xl text-[13px] font-semibold animate-[toastIn_.2s_ease-out]"
           [ngClass]="{
             'bg-emerald-500/15 border-emerald-400/30 text-emerald-100': t.type === 'success',
@@ -23,10 +25,13 @@ import { ToastService } from '../services/toast.service';
             'bg-amber-500/15 border-amber-400/30 text-amber-100': t.type === 'warning',
             'bg-white/8 border-white/15 text-white': t.type === 'info'
           }">
-          <lucide-icon [name]="iconFor(t.type)" class="w-4 h-4 shrink-0"></lucide-icon>
+          <lucide-icon [name]="iconFor(t.type)" class="w-4 h-4 shrink-0" aria-hidden="true"></lucide-icon>
           <span class="flex-1 leading-tight">{{ t.message }}</span>
-          <button (click)="toastSvc.removeToast(t.id)" class="opacity-60 hover:opacity-100 transition-opacity p-1 -mr-1">
-            <lucide-icon name="x" class="w-3.5 h-3.5"></lucide-icon>
+          <button type="button"
+            (click)="toastSvc.removeToast(t.id)"
+            [attr.aria-label]="'Fermer la notification : ' + t.message"
+            class="opacity-60 hover:opacity-100 transition-opacity p-1 -mr-1">
+            <lucide-icon name="x" class="w-3.5 h-3.5" aria-hidden="true"></lucide-icon>
           </button>
         </div>
       }

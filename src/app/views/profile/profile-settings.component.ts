@@ -5,6 +5,7 @@ import { InteractionService } from '../../services/interaction.service';
 import { TranslationService } from '../../services/translation.service';
 import { PrivacyService } from '../../services/privacy.service';
 import { DataExportService } from '../../services/data-export.service';
+import { MotionPreferenceService } from '../../services/motion-preference.service';
 import { CATEGORY_COLORS, THEME_GROUPS } from '../../constants';
 import type { Category } from '../../types';
 
@@ -245,6 +246,7 @@ export class ProfileSettingsComponent {
   private translation = inject(TranslationService);
   protected privacy = inject(PrivacyService);
   protected dataExport = inject(DataExportService);
+  private motion = inject(MotionPreferenceService);
 
   exportData(): void {
     void this.dataExport.download();
@@ -302,6 +304,10 @@ export class ProfileSettingsComponent {
       try { localStorage.setItem('cake_prefs', JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
+    // Accessibility prefs need to apply *now* — without re-asking
+    // MotionPreferenceService to re-read storage, the <html> class
+    // would only update on next page load.
+    if (key === 'reduceMotion') this.motion.refresh();
   }
 
   setDm(value: string) {
