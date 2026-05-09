@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel an in-flight CI run as soon as a new commit lands on the same
+# ref. Saves minutes on rapid pushes and prevents the GitHub status
+# checks from queueing.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: lint · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # --prefer-offline keeps subsequent runs cheap once npm warms
+      # its cache. --no-audit --no-fund keep the log readable.
+      - name: Install
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Type-check
+        run: npm run lint
+
+      - name: ESLint
+        run: npm run lint:eslint -- --max-warnings 250
+        # Warnings ceiling captures the current legacy debt so a PR
+        # can introduce new code, never more warnings.
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      # Surface bundle stats on every CI run so reviewers immediately
+      # see if a PR ballooned the initial chunk. We just glob the size
+      # report instead of a heavy reporter — keeps it fast.
+      - name: Bundle report
+        if: always()
+        run: |
+          echo "## Bundle sizes" >> $GITHUB_STEP_SUMMARY
+          echo '' >> $GITHUB_STEP_SUMMARY
+          ls -lh dist/assets/*.js 2>/dev/null | awk '{print $5"\t"$NF}' | sort -k1 -h >> $GITHUB_STEP_SUMMARY
+          echo '' >> $GITHUB_STEP_SUMMARY
