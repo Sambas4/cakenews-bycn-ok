@@ -26,6 +26,7 @@ const USER_SCOPED_KEYS = [
   'cake_private_mode',
   'cake_msg_prefs',
   'cake_prefs',
+  'cake_offline_articles_v1',
 ] as const;
 
 /**

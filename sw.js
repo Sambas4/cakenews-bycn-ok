@@ -44,7 +44,27 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('message', (event) => {
-  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
+  if (event.data?.type === 'PRECACHE_IMAGES' && Array.isArray(event.data.urls)) {
+    // Best-effort image pre-warm so the next cold-start (possibly
+    // offline) renders covers from cache. Capped to avoid abuse.
+    const urls = event.data.urls.slice(0, 20).filter((u) => typeof u === 'string');
+    event.waitUntil((async () => {
+      const cache = await caches.open(IMAGES);
+      await Promise.all(urls.map(async (url) => {
+        try {
+          const cached = await cache.match(url);
+          if (cached) return;
+          const resp = await fetch(url, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' });
+          if (resp.ok && resp.type !== 'opaqueredirect') await cache.put(url, resp);
+        } catch { /* network error — skip silently */ }
+      }));
+      trimCache(IMAGES, 200);
+    })());
+  }
 });
 
 // ────────────────────────────────────────────────────────────────
