@@ -257,7 +257,7 @@ const formatCompactNumber = (number: number) => {
                               <div class="flex gap-2 items-stretch h-20">
                                   <textarea 
                                       [(ngModel)]="msgForm.text"
-                                      [placeholder]="msgForm.withOverlay ? 'CONTENU DE L\\'ALERTE FLASH...' : 'Contenu de l\\'information défilante...'"
+                                      [placeholder]="msgForm.withOverlay ? 'CONTENU DE L’ALERTE FLASH...' : 'Contenu de l’information défilante...'"
                                       class="flex-1 rounded-xl p-3 text-sm font-bold uppercase outline-none resize-none transition-all duration-300"
                                       [ngClass]="getInputStyle()"
                                   ></textarea>
