@@ -69,5 +69,14 @@ export const routes: Routes = [
     loadComponent: () => import('./components/admin/admin-view.component').then(m => m.AdminViewComponent),
   },
 
+  {
+    // Read-only public profile reachable via shared links
+    // (`/u/marie-dupont`). Anonymous visitors can land here
+    // before authenticating — by design, so OG previews and
+    // social shares stay friction-less.
+    path: 'u/:username',
+    loadComponent: () => import('./views/public-profile.component').then(m => m.PublicProfileViewComponent),
+  },
+
   { path: '**', redirectTo: 'auth' },
 ];
