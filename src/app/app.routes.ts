@@ -78,5 +78,15 @@ export const routes: Routes = [
     loadComponent: () => import('./views/public-profile.component').then(m => m.PublicProfileViewComponent),
   },
 
+  {
+    // Legal content. Public, deep-linkable, available offline (the
+    // text ships in the bundle).
+    //   /legal/terms     — CGU
+    //   /legal/privacy   — Politique de confidentialité
+    //   /legal/mentions  — Mentions légales
+    path: 'legal/:doc',
+    loadComponent: () => import('./views/legal/legal-shell.component').then(m => m.LegalShellComponent),
+  },
+
   { path: '**', redirectTo: 'auth' },
 ];

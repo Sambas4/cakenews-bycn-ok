@@ -27,6 +27,7 @@ const USER_SCOPED_KEYS = [
   'cake_msg_prefs',
   'cake_prefs',
   'cake_offline_articles_v1',
+  'cake_email_verify_dismissed_at',
 ] as const;
 
 /**

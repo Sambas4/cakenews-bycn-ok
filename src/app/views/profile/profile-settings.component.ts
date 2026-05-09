@@ -1,11 +1,13 @@
 import { Component, inject, computed, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { InteractionService } from '../../services/interaction.service';
 import { TranslationService } from '../../services/translation.service';
 import { PrivacyService } from '../../services/privacy.service';
 import { DataExportService } from '../../services/data-export.service';
 import { MotionPreferenceService } from '../../services/motion-preference.service';
+import { ProfileMfaSectionComponent } from './profile-mfa-section.component';
 import { CATEGORY_COLORS, THEME_GROUPS } from '../../constants';
 import type { Category } from '../../types';
 
@@ -34,7 +36,7 @@ const GROUP_META: Record<string, { label: string; icon: string }> = {
 @Component({
   selector: 'app-profile-settings',
   standalone: true,
-  imports: [CommonModule, LucideAngularModule],
+  imports: [CommonModule, RouterLink, LucideAngularModule, ProfileMfaSectionComponent],
   template: `
     <div class="space-y-6 animate-[slideUp_0.25s_ease-out]">
 
@@ -216,6 +218,9 @@ const GROUP_META: Record<string, { label: string; icon: string }> = {
         </div>
       </section>
 
+      <!-- MFA / TOTP -->
+      <app-profile-mfa-section></app-profile-mfa-section>
+
       <!-- Danger zone -->
       <section class="pt-4">
         <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">Compte</h3>
@@ -235,6 +240,18 @@ const GROUP_META: Record<string, { label: string; icon: string }> = {
           </button>
         </div>
       </section>
+
+      <!-- Legal footer -->
+      <footer class="pt-2 mb-safe text-center">
+        <nav aria-label="Liens légaux"
+          class="flex items-center justify-center flex-wrap gap-x-3 gap-y-1 text-[10px] uppercase tracking-widest text-zinc-600">
+          <a routerLink="/legal/terms" class="hover:text-zinc-400 transition-colors">CGU</a>
+          <span class="opacity-40" aria-hidden="true">·</span>
+          <a routerLink="/legal/privacy" class="hover:text-zinc-400 transition-colors">Confidentialité</a>
+          <span class="opacity-40" aria-hidden="true">·</span>
+          <a routerLink="/legal/mentions" class="hover:text-zinc-400 transition-colors">Mentions</a>
+        </nav>
+      </footer>
     </div>
   `
 })

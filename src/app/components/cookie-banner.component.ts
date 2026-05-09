@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { ConsentService } from '../services/consent.service';
 
@@ -17,7 +18,7 @@ import { ConsentService } from '../services/consent.service';
 @Component({
   selector: 'app-cookie-banner',
   standalone: true,
-  imports: [CommonModule, LucideAngularModule],
+  imports: [CommonModule, RouterLink, LucideAngularModule],
   template: `
     @if (consent.needsDecision()) {
       <div role="dialog"
@@ -37,6 +38,9 @@ import { ConsentService } from '../services/consent.service';
                 Nous collectons uniquement les données nécessaires au fonctionnement de l’app.
                 Tu peux accepter le suivi anonyme des erreurs pour nous aider à corriger les bugs,
                 ou refuser — l’expérience reste identique.
+                <a routerLink="/legal/privacy" class="text-[#7ae25c] underline-offset-2 hover:underline">
+                  Politique de confidentialité
+                </a>.
               </p>
             </div>
           </div>

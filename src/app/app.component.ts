@@ -5,6 +5,7 @@ import { filter } from 'rxjs/operators';
 import { BottomNavComponent } from './components/bottom-nav.component';
 import { VibeTickerComponent } from './components/ui/vibe-ticker.component';
 import { GlobalModalRegistryComponent } from './components/global-modal-registry.component';
+import { EmailVerificationBannerComponent } from './components/email-verification-banner.component';
 import { AuthService } from './services/auth.service';
 import { MotionPreferenceService } from './services/motion-preference.service';
 
@@ -12,11 +13,12 @@ import { MotionPreferenceService } from './services/motion-preference.service';
   selector: 'app-root',
   standalone: true,
   imports: [
-    CommonModule, 
-    RouterOutlet, 
-    BottomNavComponent, 
+    CommonModule,
+    RouterOutlet,
+    BottomNavComponent,
     VibeTickerComponent,
-    GlobalModalRegistryComponent
+    GlobalModalRegistryComponent,
+    EmailVerificationBannerComponent,
   ],
   template: `
     <div class="h-[100dvh] w-full bg-black text-white flex flex-col font-sans overflow-hidden relative">
@@ -24,6 +26,12 @@ import { MotionPreferenceService } from './services/motion-preference.service';
         <!-- Vibe Ticker (Top) -->
         @if (showTicker) {
           <app-vibe-ticker></app-vibe-ticker>
+        }
+
+        <!-- Email verification ribbon — only shows when the signed-in
+             user has an unconfirmed email. Self-hides otherwise. -->
+        @if (showBottomNav) {
+          <app-email-verification-banner></app-email-verification-banner>
         }
 
         <!-- Main Content Area -->
