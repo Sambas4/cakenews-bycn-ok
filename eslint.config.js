@@ -29,6 +29,11 @@ export default tseslint.config(
       'coverage/**',
       '*.config.js',
       '*.config.ts',
+      // Edge Functions run on Deno; their `https://esm.sh/...` imports
+      // and `Deno.*` globals aren't part of the browser/Node lint
+      // surface. Lint them separately with `deno lint` from the
+      // `supabase/` workspace.
+      'supabase/functions/**',
     ],
   },
   {

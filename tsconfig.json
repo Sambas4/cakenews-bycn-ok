@@ -24,7 +24,8 @@
   "exclude": [
     "node_modules",
     "dist",
-    "out-tsc"
+    "out-tsc",
+    "supabase/functions"
   ],
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
