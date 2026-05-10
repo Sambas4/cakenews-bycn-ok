@@ -65,6 +65,18 @@ export abstract class IArticleApi {
   abstract voteVibe(articleId: string, vibe: VibeKind | null): Promise<VibeAggregate>;
   abstract postComment(articleId: string, content: string, replyToId?: string): Promise<CakeComment>;
   abstract listComments(articleId: string): Promise<CakeComment[]>;
+  /**
+   * Atomically flip the caller's like on a single comment.
+   * Returns the AFTER state — `liked` for the current user, plus the
+   * recomputed total. Implementations must serialise concurrent calls
+   * (the Supabase backend uses the `toggle_comment_like` RPC).
+   */
+  abstract toggleCommentLike(commentId: string): Promise<{ liked: boolean; totalLikes: number }>;
+  /**
+   * Returns the comment IDs the current user has liked on the given
+   * article — used to hydrate the heart icon state at room mount.
+   */
+  abstract listLikedCommentIds(articleId: string): Promise<string[]>;
 
   // -- Realtime ------------------------------------------------------
   /**

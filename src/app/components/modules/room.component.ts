@@ -205,7 +205,6 @@ export class RoomModuleComponent implements OnChanges {
   activeTab = signal<RoomTab>('debates');
   newCommentText = '';
   replyingTo: Comment | null = null;
-  likedComments = new Set<string>();
   isPosting = signal(false);
   loading = signal(false);
 
@@ -217,6 +216,13 @@ export class RoomModuleComponent implements OnChanges {
     const cached = this.comm.commentsFor(id)();
     if (cached.length > 0 || this.comm.isLoaded(id)) return cached;
     return this.comments;
+  });
+
+  /** Set of comment IDs the viewer has liked on the current article. */
+  readonly likedCommentIds = computed<Set<string>>(() => {
+    const id = this.articleId;
+    if (!id) return new Set<string>();
+    return this.comm.likedIdsFor(id)();
   });
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -235,14 +241,12 @@ export class RoomModuleComponent implements OnChanges {
   cancelReply() { this.replyingTo = null; }
 
   isCommentLiked(commentId: string): boolean {
-    return this.likedComments.has(commentId);
+    return this.likedCommentIds().has(commentId);
   }
 
   likeComment(commentId: string) {
-    if (this.likedComments.has(commentId)) this.likedComments.delete(commentId);
-    else this.likedComments.add(commentId);
-    // TODO: persist comment likes through a dedicated comment-likes
-    // table in a follow-up; the backend RPC is not in place yet.
+    if (!this.articleId) return;
+    void this.comm.toggleLike(this.articleId, commentId);
   }
 
   async postComment() {

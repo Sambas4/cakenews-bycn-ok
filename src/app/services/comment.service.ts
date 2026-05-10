@@ -9,6 +9,8 @@ import { AuthService } from './auth.service';
 interface PerArticleState {
   comments: CakeComment[];
   loaded: boolean;
+  /** Set of comment IDs the current viewer has liked. */
+  likedIds: Set<string>;
 }
 
 const PENDING_PREFIX = 'pending-';
@@ -50,22 +52,31 @@ export class CommentService {
     return computed(() => this.state()[articleId]?.comments ?? []);
   }
 
+  /** Reactive accessor for the current viewer's liked-comment IDs. */
+  likedIdsFor(articleId: string) {
+    return computed(() => this.state()[articleId]?.likedIds ?? new Set<string>());
+  }
+
   isLoaded(articleId: string): boolean {
     return Boolean(this.state()[articleId]?.loaded);
   }
 
-  /** Fetch the comment list once per article. Returns the cached value
-   *  on subsequent calls so the room tab opens instantly. */
+  /** Fetch the comment list (and the viewer's like graph) once per
+   *  article. Returns the cached value on subsequent calls so the
+   *  room tab opens instantly. */
   async list(articleId: string): Promise<CakeComment[]> {
     if (!articleId) return [];
     const existing = this.state()[articleId];
     if (existing?.loaded) return existing.comments;
 
     try {
-      const fresh = await this.api.listComments(articleId);
+      const [fresh, liked] = await Promise.all([
+        this.api.listComments(articleId),
+        this.auth.currentUser() ? this.api.listLikedCommentIds(articleId) : Promise.resolve([] as string[]),
+      ]);
       this.state.update(s => ({
         ...s,
-        [articleId]: { comments: fresh, loaded: true },
+        [articleId]: { comments: fresh, loaded: true, likedIds: new Set(liked) },
       }));
       return fresh;
     } catch (e) {
@@ -74,9 +85,77 @@ export class CommentService {
       // empty and the user gets to retry by re-entering the room.
       this.state.update(s => ({
         ...s,
-        [articleId]: { comments: existing?.comments ?? [], loaded: true },
+        [articleId]: {
+          comments: existing?.comments ?? [],
+          loaded: true,
+          likedIds: existing?.likedIds ?? new Set<string>(),
+        },
       }));
       return existing?.comments ?? [];
+    }
+  }
+
+  /**
+   * Optimistically toggle a like on a comment. Bumps/decrements the
+   * local counter, fires the RPC, and reconciles with the server's
+   * authoritative aggregate. On failure, rolls back the local edit
+   * and surfaces a discreet toast.
+   */
+  async toggleLike(articleId: string, commentId: string): Promise<void> {
+    if (!articleId || !commentId) return;
+    const before = this.state()[articleId];
+    if (!before) return;
+
+    const wasLiked = before.likedIds.has(commentId);
+    const optimisticDelta = wasLiked ? -1 : 1;
+    const nextLikedIds = new Set(before.likedIds);
+    if (wasLiked) nextLikedIds.delete(commentId);
+    else nextLikedIds.add(commentId);
+
+    // 1) Optimistic patch.
+    this.state.update(s => {
+      const curr = s[articleId];
+      if (!curr) return s;
+      return {
+        ...s,
+        [articleId]: {
+          ...curr,
+          likedIds: nextLikedIds,
+          comments: curr.comments.map(c =>
+            c.id === commentId
+              ? { ...c, likes: Math.max(0, (c.likes ?? 0) + optimisticDelta) }
+              : c
+          ),
+        },
+      };
+    });
+
+    try {
+      const { liked, totalLikes } = await this.api.toggleCommentLike(commentId);
+      // 2) Reconcile with the server's authoritative state. The set
+      // and the counter both come from the RPC.
+      this.state.update(s => {
+        const curr = s[articleId];
+        if (!curr) return s;
+        const reconciledLiked = new Set(curr.likedIds);
+        if (liked) reconciledLiked.add(commentId);
+        else reconciledLiked.delete(commentId);
+        return {
+          ...s,
+          [articleId]: {
+            ...curr,
+            likedIds: reconciledLiked,
+            comments: curr.comments.map(c =>
+              c.id === commentId ? { ...c, likes: totalLikes } : c
+            ),
+          },
+        };
+      });
+    } catch (e) {
+      // 3) Rollback to the pre-toggle state.
+      this.logger.warn('CommentService.toggleLike failed; rolling back', e);
+      this.state.update(s => ({ ...s, [articleId]: before }));
+      this.toast.showToast("Le vote n'a pas pu être enregistré", 'warning');
     }
   }
 
@@ -106,8 +185,15 @@ export class CommentService {
 
     // 1) Optimistic insert.
     this.state.update(s => {
-      const curr = s[articleId] ?? { comments: [], loaded: true };
-      return { ...s, [articleId]: { comments: [...curr.comments, placeholder], loaded: true } };
+      const curr = s[articleId] ?? { comments: [], loaded: true, likedIds: new Set<string>() };
+      return {
+        ...s,
+        [articleId]: {
+          ...curr,
+          comments: [...curr.comments, placeholder],
+          loaded: true,
+        },
+      };
     });
 
     try {

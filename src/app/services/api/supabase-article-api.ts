@@ -128,6 +128,29 @@ export class SupabaseArticleApi extends IArticleApi {
     return this.toCakeComment(row);
   }
 
+  override async toggleCommentLike(commentId: string): Promise<{ liked: boolean; totalLikes: number }> {
+    const { data, error } = await this.supabase.client.rpc('toggle_comment_like', {
+      p_comment_id: commentId,
+    });
+    if (error) throw error;
+    // The RPC returns a single-row table; supabase-js surfaces it as
+    // an array of objects when `returns table(...)` is used.
+    const row = Array.isArray(data) ? data[0] : data;
+    return {
+      liked: Boolean((row as { liked?: boolean })?.liked),
+      totalLikes: Number((row as { total_likes?: number })?.total_likes ?? 0),
+    };
+  }
+
+  override async listLikedCommentIds(articleId: string): Promise<string[]> {
+    const { data, error } = await this.supabase.client.rpc('list_liked_comments', {
+      p_article_id: articleId,
+    });
+    if (error) throw error;
+    const rows = (data as Array<{ comment_id?: string } | string> | null) ?? [];
+    return rows.map(r => (typeof r === 'string' ? r : r?.comment_id ?? '')).filter(Boolean);
+  }
+
   override async listComments(articleId: string): Promise<CakeComment[]> {
     const { data, error } = await this.supabase.client
       .from('article_comments')

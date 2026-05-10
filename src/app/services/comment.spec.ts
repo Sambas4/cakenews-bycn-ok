@@ -149,3 +149,45 @@ describe('CommentService — post optimistic', () => {
     expect(fresh.map(c => c.content)).toEqual(['first']);
   });
 });
+
+describe('CommentService — like toggle', () => {
+  let env = setup();
+  beforeEach(() => { env = setup(); });
+
+  it('flips the like state and updates the local counter optimistically', async () => {
+    const real = await env.svc.post('a', 'Hello');
+    expect(real).not.toBeNull();
+    const id = real!.id;
+
+    await env.svc.list('a');
+    expect(env.svc.likedIdsFor('a')().has(id)).toBe(false);
+
+    await env.svc.toggleLike('a', id);
+    expect(env.svc.likedIdsFor('a')().has(id)).toBe(true);
+    expect(env.svc.commentsFor('a')()[0]?.likes).toBe(1);
+
+    await env.svc.toggleLike('a', id);
+    expect(env.svc.likedIdsFor('a')().has(id)).toBe(false);
+    expect(env.svc.commentsFor('a')()[0]?.likes).toBe(0);
+  });
+
+  it('hydrates likedIds from the API on first list', async () => {
+    const real = await env.svc.post('a', 'pre-liked');
+    expect(real).not.toBeNull();
+    // Like the comment directly through the underlying API to simulate
+    // a vote cast on a previous session.
+    await env.api.toggleCommentLike(real!.id);
+
+    // Force a reload to exercise the hydration path.
+    env.svc.invalidate('a');
+    await env.svc.list('a');
+    expect(env.svc.likedIdsFor('a')().has(real!.id)).toBe(true);
+  });
+
+  it('toggleLike on an unloaded article is a no-op', async () => {
+    // No prior list() call, so state has no entry for this article.
+    await env.svc.toggleLike('untouched', 'whatever');
+    expect(env.svc.commentsFor('untouched')()).toEqual([]);
+    expect(env.svc.likedIdsFor('untouched')().size).toBe(0);
+  });
+});

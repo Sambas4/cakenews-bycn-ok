@@ -28,9 +28,11 @@ import {
 export class InMemoryArticleApi extends IArticleApi {
   private articles = new Map<string, Article>();
   private commentsByArticle = new Map<string, CakeComment[]>();
+  /** comment id → set of user IDs who have liked the comment. */
+  private commentLikes = new Map<string, Set<string>>();
   private votes = new Map<string, Map<string, VibeKind>>();
   private listeners = new Set<(articles: Article[]) => void>();
-  private currentUserId: string = 'in-memory-user';
+  private currentUserId = 'in-memory-user';
 
   /** Test helper — seed the store. Replaces existing articles. */
   seed(articles: Article[]): void {
@@ -139,6 +141,36 @@ export class InMemoryArticleApi extends IArticleApi {
 
   override async listComments(articleId: string): Promise<CakeComment[]> {
     return [...(this.commentsByArticle.get(articleId) ?? [])];
+  }
+
+  override async toggleCommentLike(commentId: string): Promise<{ liked: boolean; totalLikes: number }> {
+    let likers = this.commentLikes.get(commentId);
+    if (!likers) {
+      likers = new Set();
+      this.commentLikes.set(commentId, likers);
+    }
+    const wasLiked = likers.has(this.currentUserId);
+    if (wasLiked) likers.delete(this.currentUserId);
+    else likers.add(this.currentUserId);
+
+    // Mirror the count onto the comment row to mirror the SQL RPC.
+    for (const list of this.commentsByArticle.values()) {
+      const target = list.find(c => c.id === commentId);
+      if (target) {
+        target.likes = likers.size;
+        break;
+      }
+    }
+    return { liked: !wasLiked, totalLikes: likers.size };
+  }
+
+  override async listLikedCommentIds(articleId: string): Promise<string[]> {
+    const ids: string[] = [];
+    const comments = this.commentsByArticle.get(articleId) ?? [];
+    for (const c of comments) {
+      if (this.commentLikes.get(c.id)?.has(this.currentUserId)) ids.push(c.id);
+    }
+    return ids;
   }
 
   override subscribeToArticles(onChange: (articles: Article[]) => void): () => void {
