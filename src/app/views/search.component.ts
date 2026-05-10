@@ -7,6 +7,9 @@ import { Router } from '@angular/router';
 import { DataService } from '../services/data.service';
 import { PublicProfileService } from '../services/public-profile.service';
 import { ImagePerf } from '../services/image-perf.service';
+import { ARTICLE_API, IArticleApi } from '../services/api/article-api';
+import { NetworkStatusService } from '../services/network-status.service';
+import { Logger } from '../services/logger.service';
 import type { Article, PublicProfile } from '../types';
 
 interface ScoredArticle {
@@ -154,14 +157,27 @@ export class SearchViewComponent {
   private profileService = inject(PublicProfileService);
   private router = inject(Router);
   private imagePerf = inject(ImagePerf);
+  private api = inject<IArticleApi>(ARTICLE_API);
+  private network = inject(NetworkStatusService);
+  private logger = inject(Logger);
 
   readonly searchQuery = signal('');
   readonly people = signal<PublicProfile[]>([]);
+  /** Server-ranked article results when online; empty when offline. */
+  readonly serverResults = signal<Article[]>([]);
 
-  /** Articles ranked by relevance to the current query. */
+  /**
+   * The view prefers the server-side ranking when available — pg_trgm
+   * similarity beats any client-side approximation. We fall back to
+   * the local weighted score when the device is offline (or the RPC
+   * fails) so the search bar never goes dark.
+   */
   readonly results = computed<Article[]>(() => {
     const q = this.searchQuery().toLowerCase().trim();
     if (!q) return [];
+
+    const server = this.serverResults();
+    if (this.network.isOnline() && server.length > 0) return server;
 
     const inventory = this.dataService.articles().filter(
       a => (a.status ?? 'published') === 'published'
@@ -178,13 +194,27 @@ export class SearchViewComponent {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    // When the query stabilises for 250 ms, fire the people search.
+    // When the query stabilises for 250 ms, fire the people + article
+    // search in parallel. The article search hits the server-side
+    // pg_trgm RPC when online; offline we leave `serverResults` empty
+    // so the computed falls back to the local ranker.
     effect(() => {
       const q = this.searchQuery();
       if (this.debounceTimer) { clearTimeout(this.debounceTimer); this.debounceTimer = null; }
-      if (!q.trim()) { this.people.set([]); return; }
+      if (!q.trim()) { this.people.set([]); this.serverResults.set([]); return; }
+      const trimmed = q.trim();
       this.debounceTimer = setTimeout(() => {
-        void this.profileService.search(q.trim(), 8).then(p => this.people.set(p));
+        void this.profileService.search(trimmed, 8).then(p => this.people.set(p));
+        if (this.network.isOnline()) {
+          void this.api.searchArticles(trimmed, 30)
+            .then(rs => this.serverResults.set(rs))
+            .catch(e => {
+              this.logger.warn('search_articles RPC failed', e);
+              this.serverResults.set([]);
+            });
+        } else {
+          this.serverResults.set([]);
+        }
       }, 250);
     });
   }

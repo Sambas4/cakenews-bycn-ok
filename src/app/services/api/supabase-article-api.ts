@@ -70,6 +70,17 @@ export class SupabaseArticleApi extends IArticleApi {
     return (data as Article | null) ?? null;
   }
 
+  override async searchArticles(query: string, limit = 25): Promise<Article[]> {
+    const trimmed = query.trim();
+    if (!trimmed) return [];
+    const { data, error } = await this.supabase.client.rpc('search_articles', {
+      p_query: trimmed,
+      p_limit: Math.min(Math.max(limit, 1), 100),
+    });
+    if (error) throw error;
+    return (data as Article[] | null) ?? [];
+  }
+
   override async upsert(article: Article): Promise<Article> {
     const { data, error } = await this.supabase.client
       .from('articles')

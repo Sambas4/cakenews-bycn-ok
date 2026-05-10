@@ -77,6 +77,55 @@ export class InMemoryArticleApi extends IArticleApi {
     return this.articles.get(id) ?? null;
   }
 
+  override async searchArticles(query: string, limit = 25): Promise<Article[]> {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const cap = Math.min(Math.max(limit, 1), 100);
+    const scored: Array<{ a: Article; s: number }> = [];
+    for (const a of this.articles.values()) {
+      if ((a.status ?? 'published') !== 'published') continue;
+      const titleSim = this.fuzzyScore(a.title?.toLowerCase() ?? '', q);
+      const summarySim = this.fuzzyScore(a.summary?.toLowerCase() ?? '', q);
+      const authorSim = this.fuzzyScore(a.author?.toLowerCase() ?? '', q);
+      const catExact = a.category?.toLowerCase() === q ? 1 : 0;
+      const tagMatch = a.tags?.some(t => t.toLowerCase().includes(q)) ? 1 : 0;
+
+      const composite =
+        titleSim   * 0.55 +
+        summarySim * 0.20 +
+        catExact   * 0.10 +
+        tagMatch   * 0.10 +
+        authorSim  * 0.05 +
+        Math.log10(1 + (a.likes ?? 0) + 2 * (a.comments ?? 0)) / 8;
+
+      // Match the SQL `where` clause thresholds so the in-memory
+      // results approximate the production ranking.
+      const passes =
+        titleSim > 0.18 ||
+        summarySim > 0.20 ||
+        authorSim > 0.30 ||
+        catExact === 1 ||
+        tagMatch === 1;
+      if (passes) scored.push({ a, s: composite });
+    }
+    scored.sort((x, y) => y.s - x.s);
+    return scored.slice(0, cap).map(x => x.a);
+  }
+
+  /** Crude fuzzy similarity in [0, 1] approximating pg_trgm's
+   *  `similarity()` for tests. Returns the longest contiguous match
+   *  ratio against the query, then clamps. */
+  private fuzzyScore(haystack: string, needle: string): number {
+    if (!haystack || !needle) return 0;
+    if (haystack === needle) return 1;
+    if (haystack.includes(needle)) return Math.min(1, needle.length / Math.max(haystack.length, needle.length) + 0.4);
+    // Token-level fallback — counts how many query words appear.
+    const words = needle.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return 0;
+    const hits = words.filter(w => haystack.includes(w)).length;
+    return hits / words.length * 0.6;
+  }
+
   override async upsert(article: Article): Promise<Article> {
     this.articles.set(article.id, { ...article });
     this.broadcast();

@@ -55,6 +55,14 @@ export abstract class IArticleApi {
   abstract listAllPublished(): Promise<Article[]>;
   abstract listFeedPage(opts?: ListFeedOptions): Promise<FeedPage>;
   abstract findById(id: string): Promise<Article | null>;
+  /**
+   * Server-side, relevance-ranked search over published articles.
+   * Falls back to the empty list when the query is whitespace-only.
+   * The Supabase implementation uses the `search_articles` RPC
+   * (`pg_trgm` similarity); the in-memory implementation runs a
+   * simpler weighted match that mirrors the SQL ranking.
+   */
+  abstract searchArticles(query: string, limit?: number): Promise<Article[]>;
 
   // -- Write (admin-ish) ---------------------------------------------
   abstract upsert(article: Article): Promise<Article>;

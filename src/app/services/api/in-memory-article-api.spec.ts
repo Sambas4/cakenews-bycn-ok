@@ -129,6 +129,62 @@ describe('InMemoryArticleApi — engagement', () => {
   });
 });
 
+describe('InMemoryArticleApi — search', () => {
+  let env = setup();
+  beforeEach(() => { env = setup(); });
+
+  it('returns [] for an empty query', async () => {
+    env.api.seed([article('a')]);
+    expect(await env.api.searchArticles('   ')).toEqual([]);
+    expect(await env.api.searchArticles('')).toEqual([]);
+  });
+
+  it('matches by title with the heaviest weight', async () => {
+    env.api.seed([
+      article('match', { title: 'Macron annonce une réforme' }),
+      article('decoy', { title: 'Lakers domptent les Mavs', summary: 'macron mentionné en passant' }),
+    ]);
+    const out = await env.api.searchArticles('macron');
+    expect(out[0]?.id).toBe('match');
+  });
+
+  it('matches by category exact', async () => {
+    env.api.seed([
+      article('a', { title: 'Kaamelott débarque', category: 'Cinéma' as Category }),
+      article('b', { title: 'BCE relève les taux', category: 'Économie' as Category }),
+    ]);
+    const out = await env.api.searchArticles('cinéma');
+    expect(out.find(a => a.id === 'a')).toBeTruthy();
+  });
+
+  it('matches by tag substring', async () => {
+    env.api.seed([
+      article('lkr', { title: 'Match du soir', category: 'Football' as Category, tags: ['election2026', 'campaign'] }),
+      article('zzz', { title: 'Sans tag pertinent', category: 'Football' as Category }),
+    ]);
+    const out = await env.api.searchArticles('election');
+    expect(out[0]?.id).toBe('lkr');
+  });
+
+  it('skips drafts', async () => {
+    env.api.seed([
+      article('pub', { title: 'Test query target', status: 'published' }),
+      article('drf', { title: 'Test query target', status: 'draft' }),
+    ]);
+    const out = await env.api.searchArticles('test query target');
+    expect(out.map(a => a.id)).toEqual(['pub']);
+  });
+
+  it('respects the limit', async () => {
+    const items = Array.from({ length: 10 }, (_, i) => article(`a${i}`, {
+      title: `Macron numéro ${i}`,
+    }));
+    env.api.seed(items);
+    const out = await env.api.searchArticles('macron', 3);
+    expect(out).toHaveLength(3);
+  });
+});
+
 describe('InMemoryArticleApi — realtime', () => {
   let env = setup();
   beforeEach(() => { env = setup(); });
