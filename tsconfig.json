@@ -25,7 +25,9 @@
     "node_modules",
     "dist",
     "out-tsc",
-    "supabase/functions"
+    "supabase/functions",
+    "tests/e2e",
+    "playwright.config.ts"
   ],
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

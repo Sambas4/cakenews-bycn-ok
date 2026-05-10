@@ -34,6 +34,11 @@ export default tseslint.config(
       // surface. Lint them separately with `deno lint` from the
       // `supabase/` workspace.
       'supabase/functions/**',
+      // Playwright tests run in their own TS context with a different
+      // tsconfig; they have their own lint pass via `playwright test
+      // --reporter=list` if needed.
+      'tests/e2e/**',
+      'playwright.config.ts',
     ],
   },
   {

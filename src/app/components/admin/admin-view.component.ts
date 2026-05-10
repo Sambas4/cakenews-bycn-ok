@@ -177,44 +177,59 @@ import { RealtimeChannel } from '@supabase/supabase-js';
         </div>
       </div>
 
-      <!-- Main Content Area -->
+      <!-- Main Content Area
+           Each tab is wrapped in a defer-on-immediate block so
+           Angular emits a separate chunk per panel. The studio (the
+           heaviest) used to ride along with the dashboard at admin
+           bootstrap time; now an editor lands on Reseau and only
+           pays for the one panel they actually opened. -->
       <div class="flex-1 overflow-hidden relative bg-zinc-950">
         @switch (activeTab()) {
           @case (AdminTab.RESEAU) {
-            <app-admin-dashboard
-              [articles]="articles()"
-              [users]="users()"
-              (editArticle)="handleEditArticle($event)"
-              (deleteArticle)="handleDeleteArticle($event)"
-            ></app-admin-dashboard>
+            @defer (on immediate) {
+              <app-admin-dashboard
+                [articles]="articles()"
+                [users]="users()"
+                (editArticle)="handleEditArticle($event)"
+                (deleteArticle)="handleDeleteArticle($event)"
+              ></app-admin-dashboard>
+            } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.DOSSIERS) {
-            <app-admin-studio
-              (publish)="handlePublish($event)"
-              (preview)="handlePreview($event)"
-            ></app-admin-studio>
+            @defer (on immediate) {
+              <app-admin-studio
+                (publish)="handlePublish($event)"
+                (preview)="handlePreview($event)"
+              ></app-admin-studio>
+            } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.UTILISATEURS) {
-            <app-admin-users
-              (sendNotification)="handleSendNotification($event)"
-            ></app-admin-users>
+            @defer (on immediate) {
+              <app-admin-users
+                (sendNotification)="handleSendNotification($event)"
+              ></app-admin-users>
+            } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.AUDIT) {
-            <app-admin-audit
-              (editArticle)="handleEditArticle($event)"
-            ></app-admin-audit>
-            <app-admin-counter-briefs></app-admin-counter-briefs>
+            @defer (on immediate) {
+              <app-admin-audit
+                (editArticle)="handleEditArticle($event)"
+              ></app-admin-audit>
+              <app-admin-counter-briefs></app-admin-counter-briefs>
+            } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.ANTENNE) {
-            <app-admin-antenne></app-admin-antenne>
+            @defer (on immediate) {
+              <app-admin-antenne></app-admin-antenne>
+            } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.LOCALISATION) {
-            <app-admin-localisation></app-admin-localisation>
+            @defer (on immediate) {
+              <app-admin-localisation></app-admin-localisation>
+            } @placeholder { <div class="h-full"></div> }
           }
           @default {
-            <div
-              class="flex flex-col items-center justify-center h-full text-zinc-600 bg-zinc-950"
-            >
+            <div class="flex flex-col items-center justify-center h-full text-zinc-600 bg-zinc-950">
               <lucide-icon name="database" class="w-12 h-12 mb-4"></lucide-icon>
               <p class="text-xs font-mono uppercase">Module Offline</p>
             </div>
