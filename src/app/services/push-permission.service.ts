@@ -2,6 +2,8 @@ import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { Logger } from './logger.service';
 import { SupabaseService } from './supabase.service';
 import { AuthService } from './auth.service';
+import { PlatformService } from './platform.service';
+import { PushNotifications } from '@capacitor/push-notifications';
 
 export type PushStatus = 'unsupported' | 'default' | 'granted' | 'denied';
 
@@ -35,6 +37,7 @@ export class PushPermissionService {
   private logger = inject(Logger);
   private supabase = inject(SupabaseService);
   private auth = inject(AuthService);
+  private platform = inject(PlatformService);
 
   private readonly vapidKey = readVapidKey();
   private autoSubscribeAttempted = false;
@@ -58,9 +61,39 @@ export class PushPermissionService {
     });
   }
 
-  /** Best-effort request flow. Returns the resolved status. */
+  /**
+   * Best-effort request flow. Returns the resolved status.
+   *
+   * Native iOS / Android use the Capacitor PushNotifications plugin
+   * which routes through APNs (iOS) or FCM (Android). The web path
+   * stays on the standard `Notification.requestPermission()` API
+   * backed by VAPID Web Push.
+   */
   async request(): Promise<PushStatus> {
-    if (this.status() !== 'default') return this.status();
+    if (this.status() !== 'default' && this.status() !== 'unsupported') return this.status();
+
+    if (this.platform.isNative) {
+      try {
+        const result = await PushNotifications.requestPermissions();
+        const next = this.normalise(result.receive as NotificationPermission);
+        this.status.set(next);
+        if (next === 'granted') {
+          // The native plugin only delivers a device token after
+          // `register()` and exclusively via the `registration` event.
+          await PushNotifications.register();
+          const uid = this.auth.currentUser()?.id;
+          if (uid) {
+            this.autoSubscribeAttempted = true;
+            void this.persistSubscription(uid);
+          }
+        }
+        return next;
+      } catch (e) {
+        this.logger.warn('native push permission request failed', e);
+        return this.status();
+      }
+    }
+
     if (typeof Notification === 'undefined') {
       this.status.set('unsupported');
       return 'unsupported';
@@ -69,9 +102,6 @@ export class PushPermissionService {
       const result = await Notification.requestPermission();
       const next = this.normalise(result);
       this.status.set(next);
-      // If the user just granted permission, eagerly persist the
-      // subscription rather than waiting for the auth effect to
-      // re-fire on a future cycle.
       const uid = this.auth.currentUser()?.id;
       if (next === 'granted' && uid) {
         this.autoSubscribeAttempted = true;
@@ -131,11 +161,38 @@ export class PushPermissionService {
 
   /**
    * Persist the device's PushSubscription into Supabase so the
-   * `send-push` Edge Function can reach this user. Called automatically
-   * on login when permission is already `granted`. Idempotent.
+   * `send-push` Edge Function can reach this user. Idempotent.
+   *
+   * Native path: register a one-shot `registration` listener that
+   * Capacitor fires with the APNs/FCM token, then upsert with a
+   * synthetic endpoint that includes the platform prefix. The send-
+   * push Edge Function dispatches differently for those endpoints.
+   *
+   * Web path: subscribe via PushManager, persist the standard
+   * Web Push payload (endpoint + p256dh + auth).
    */
   private async persistSubscription(uid: string): Promise<void> {
-    if (!this.vapidKey) return;                     // deployment without push
+    if (this.platform.isNative) {
+      try {
+        const token = await this.awaitNativeRegistration();
+        if (!token) return;
+        await this.supabase.client.from('push_subscriptions').upsert(
+          {
+            user_uid: uid,
+            endpoint: `${this.platform.runtime}:${token}`,
+            p256dh: '',
+            auth: '',
+            user_agent: this.platform.runtime,
+          },
+          { onConflict: 'user_uid,endpoint' }
+        );
+      } catch (e) {
+        this.logger.warn('native push registration persist failed', e);
+      }
+      return;
+    }
+
+    if (!this.vapidKey) return;
     const sub = await this.subscribe(this.vapidKey);
     if (!sub) return;
     const json = sub.toJSON();
@@ -158,6 +215,30 @@ export class PushPermissionService {
     } catch (e) {
       this.logger.warn('push subscription persist failed', e);
     }
+  }
+
+  /**
+   * Wait for Capacitor to surface the APNs/FCM device token via the
+   * `registration` event. Capped at 10 seconds to avoid hanging the
+   * caller forever when push isn't configured on the device.
+   */
+  private async awaitNativeRegistration(): Promise<string | null> {
+    return new Promise<string | null>((resolve) => {
+      const timeout = setTimeout(() => { resolve(null); cleanup(); }, 10_000);
+      const handler = PushNotifications.addListener('registration', (token) => {
+        cleanup();
+        resolve(token.value);
+      });
+      const errHandler = PushNotifications.addListener('registrationError', () => {
+        cleanup();
+        resolve(null);
+      });
+      const cleanup = () => {
+        clearTimeout(timeout);
+        void handler.then(h => h.remove());
+        void errHandler.then(h => h.remove());
+      };
+    });
   }
 
   // ────────────────────────────────────────────────────────────────
