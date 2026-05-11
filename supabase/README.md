@@ -31,6 +31,8 @@ supabase link --project-ref <PROJECT_REF>
 # 2) Apply migrations + functions in one shot.
 supabase db push
 supabase functions deploy delete-account
+supabase functions deploy export-user-data
+supabase functions deploy healthcheck
 supabase functions deploy send-push
 
 # 3) Wire VAPID keys for web push (one-time).
@@ -42,6 +44,30 @@ supabase secrets set \
 
 # 4) Mirror the public VAPID key on the client so it can subscribe.
 echo 'VITE_VAPID_PUBLIC_KEY=BPub...' >> .env.local
+
+# 5) (Optional) Apple Push Notification service for the iOS native app.
+#    Create a .p8 key in the Apple Developer portal (Certificates,
+#    Identifiers & Profiles → Keys → APNs). The `APNS_PRIVATE_KEY` value
+#    is the full PEM content of that .p8 file.
+supabase secrets set \
+  APNS_TEAM_ID='ABCDE12345' \
+  APNS_KEY_ID='FGHIJ67890' \
+  APNS_PRIVATE_KEY="$(cat AuthKey_FGHIJ67890.p8)" \
+  APNS_BUNDLE_ID='app.cakenews.app'
+#    Add APNS_USE_SANDBOX='1' for TestFlight builds.
+
+# 6) (Optional) Firebase Cloud Messaging for the Android native app.
+#    Generate a service-account JSON in the Firebase console
+#    (Project settings → Service accounts → Generate new private key).
+supabase secrets set \
+  FCM_PROJECT_ID='cakenews-prod' \
+  FCM_SERVICE_ACCOUNT="$(cat firebase-admin.json)"
+
+# 7) Wire the healthcheck self-poll URL. Migration 0006 schedules a
+#    `pg_cron` job at 1-minute cadence that calls this URL and writes
+#    the response into `health_snapshots`. Without this GUC the cron
+#    silently no-ops, which is fine in dev.
+psql "$DATABASE_URL" -c "alter database postgres set app.healthcheck_url = 'https://<PROJECT_REF>.supabase.co/functions/v1/healthcheck';"
 ```
 
 The migrations are idempotent on a clean database; if you run them
