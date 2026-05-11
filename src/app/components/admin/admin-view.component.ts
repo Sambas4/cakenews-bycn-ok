@@ -22,6 +22,7 @@ import { AdminStudioComponent } from "./admin-studio.component";
 import { AdminUsersComponent } from "./admin-users.component";
 import { AdminAuditComponent } from "./admin-audit.component";
 import { AdminCounterBriefsComponent } from "./admin-counter-briefs.component";
+import { AdminHealthHistoryComponent } from "./admin-health-history.component";
 import { AdminStatusBadgeComponent } from "./admin-status-badge.component";
 import { AdminAntenneComponent } from "./admin-antenne.component";
 import { AdminLocalisationComponent } from "./admin-localisation.component";
@@ -44,6 +45,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
     AdminAntenneComponent,
     AdminLocalisationComponent,
     AdminCounterBriefsComponent,
+    AdminHealthHistoryComponent,
     AdminStatusBadgeComponent,
   ],
   template: `
@@ -212,6 +214,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
           }
           @case (AdminTab.AUDIT) {
             @defer (on immediate) {
+              <app-admin-health-history></app-admin-health-history>
               <app-admin-audit
                 (editArticle)="handleEditArticle($event)"
               ></app-admin-audit>
