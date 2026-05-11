@@ -67,6 +67,40 @@ const GROUP_META: Record<string, { label: string; icon: string }> = {
         </div>
       </section>
 
+      <!-- Language -->
+      <section>
+        <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">
+          {{ t()('ADMIN_TAB_LANG', 'Langue') }}
+        </h3>
+        <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+          <div class="px-4 py-3.5">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-8 h-8 rounded-xl bg-white/[0.04] flex items-center justify-center">
+                <lucide-icon name="languages" class="w-4 h-4 text-zinc-300"></lucide-icon>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[13px] font-bold text-white">
+                  {{ translation.currentDictionary().name }}
+                </span>
+                <span class="text-[10.5px] text-zinc-500">
+                  Interface, navigation, étiquettes
+                </span>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5 bg-black/30 p-1 rounded-xl border border-white/[0.04]">
+              @for (d of translation.availableDictionaries(); track d.id) {
+                <button type="button" (click)="setLocale(d.id)"
+                  [attr.aria-pressed]="translation.currentLocale() === d.id"
+                  class="text-[10px] font-black uppercase tracking-widest py-2 rounded-lg transition-all"
+                  [ngClass]="translation.currentLocale() === d.id ? 'bg-white text-black shadow' : 'text-zinc-500 hover:text-white'">
+                  {{ d.name }}
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Privacy -->
       <section>
         <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">Confidentialité</h3>
@@ -260,7 +294,14 @@ export class ProfileSettingsComponent {
   deleteAccount = output<void>();
 
   private interaction = inject(InteractionService);
-  private translation = inject(TranslationService);
+  protected translation = inject(TranslationService);
+
+  // Convenience accessor so the template can keep using `t()(...)`.
+  protected t = this.translation.t;
+
+  setLocale(id: string): void {
+    this.translation.switchDictionary(id);
+  }
   protected privacy = inject(PrivacyService);
   protected dataExport = inject(DataExportService);
   private motion = inject(MotionPreferenceService);

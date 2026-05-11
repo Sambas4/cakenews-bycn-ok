@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { ConsentService } from '../services/consent.service';
+import { TranslationService } from '../services/translation.service';
 
 /**
  * GDPR-aligned consent banner.
@@ -12,8 +13,10 @@ import { ConsentService } from '../services/consent.service';
  * "Accepter" larger than "Refuser". Both buttons advance the state
  * machine in one tap.
  *
- * Visually anchored above the bottom navigation. Tailwind utility
- * classes only — no card design changes elsewhere.
+ * All visible strings flow through {@link TranslationService} so the
+ * banner shows in the viewer's preferred language. The
+ * `aria-labelledby` and `aria-describedby` references stay valid
+ * regardless of locale — the labels' text content is what's swapped.
  */
 @Component({
   selector: 'app-cookie-banner',
@@ -32,14 +35,12 @@ import { ConsentService } from '../services/consent.service';
             </div>
             <div class="flex-1 min-w-0">
               <h2 id="cake-consent-title" class="text-[13px] font-black text-white leading-tight">
-                Confidentialité
+                {{ t()('CONSENT_TITLE') }}
               </h2>
               <p id="cake-consent-body" class="text-[11.5px] text-zinc-400 leading-snug mt-1">
-                Nous collectons uniquement les données nécessaires au fonctionnement de l’app.
-                Tu peux accepter le suivi anonyme des erreurs pour nous aider à corriger les bugs,
-                ou refuser — l’expérience reste identique.
+                {{ t()('CONSENT_BODY') }}
                 <a routerLink="/legal/privacy" class="text-[#7ae25c] underline-offset-2 hover:underline">
-                  Politique de confidentialité
+                  {{ t()('CONSENT_POLICY_LINK') }}
                 </a>.
               </p>
             </div>
@@ -48,11 +49,11 @@ import { ConsentService } from '../services/consent.service';
           <div class="grid grid-cols-2 gap-2">
             <button type="button" (click)="consent.reject()"
               class="h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[10.5px] font-black uppercase tracking-widest text-zinc-300 hover:bg-white/[0.08] active:scale-[0.98] transition-all">
-              Refuser
+              {{ t()('CONSENT_REJECT') }}
             </button>
             <button type="button" (click)="consent.accept()"
               class="h-10 rounded-xl bg-[#7ae25c] text-black text-[10.5px] font-black uppercase tracking-widest hover:bg-[#9aef82] active:scale-[0.98] transition-all">
-              Accepter
+              {{ t()('CONSENT_ACCEPT') }}
             </button>
           </div>
         </div>
@@ -62,4 +63,6 @@ import { ConsentService } from '../services/consent.service';
 })
 export class CookieBannerComponent {
   protected consent = inject(ConsentService);
+  private translation = inject(TranslationService);
+  protected t = this.translation.t;
 }

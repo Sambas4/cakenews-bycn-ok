@@ -8,8 +8,8 @@ import { CommentService } from './comment.service';
  * next session.
  *
  * Anything *not* listed here (cohort bucket, supabase auth tokens
- * managed by Supabase itself, accessibility settings) is allowed to
- * survive across logouts.
+ * managed by Supabase itself, accessibility / language settings) is
+ * allowed to survive across logouts.
  */
 const USER_SCOPED_KEYS = [
   'cake_likes',

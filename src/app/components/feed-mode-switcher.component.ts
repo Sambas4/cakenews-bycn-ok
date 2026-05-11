@@ -4,6 +4,7 @@ import { LucideAngularModule } from 'lucide-angular';
 import { FeedModeService, FEED_MODES, FeedMode } from '../services/feed-mode.service';
 import { NetworkStatusService } from '../services/network-status.service';
 import { DataService } from '../services/data.service';
+import { TranslationService } from '../services/translation.service';
 
 /**
  * Slim 3-pill mode switcher. Designed to overlay the existing card stack
@@ -23,12 +24,12 @@ import { DataService } from '../services/data.service';
           <button type="button"
             role="tab"
             [attr.aria-selected]="active() === m.id"
-            [attr.aria-label]="m.label + ' — ' + m.hint"
+            [attr.aria-label]="label(m.id) + ' — ' + hint(m.id)"
             (click)="select(m.id)"
             class="relative h-8 px-3 rounded-full inline-flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-[0.18em] transition-all"
             [ngClass]="active() === m.id ? 'bg-white text-black shadow' : 'text-white/60 hover:text-white'">
             <lucide-icon [name]="m.icon" class="w-3 h-3"></lucide-icon>
-            {{ m.label }}
+            {{ label(m.id) }}
             @if (active() === m.id) {
               <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full" [style.backgroundColor]="m.accent"></span>
             }
@@ -50,9 +51,32 @@ export class FeedModeSwitcherComponent {
   private mode = inject(FeedModeService);
   private network = inject(NetworkStatusService);
   private data = inject(DataService);
+  private translation = inject(TranslationService);
 
   readonly modes = FEED_MODES;
   active = this.mode.mode;
+
+  private readonly labelKey: Record<FeedMode, string> = {
+    pulse: 'LANE_PULSE',
+    radar: 'LANE_RADAR',
+    cercle: 'LANE_CERCLE',
+  };
+  private readonly hintKey: Record<FeedMode, string> = {
+    pulse: 'LANE_PULSE_HINT',
+    radar: 'LANE_RADAR_HINT',
+    cercle: 'LANE_CERCLE_HINT',
+  };
+
+  /** Localized label for a lane, falling back to the canonical name. */
+  label(id: FeedMode): string {
+    const fallback = this.modes.find(m => m.id === id)?.label ?? id;
+    return this.translation.t()(this.labelKey[id], fallback);
+  }
+
+  hint(id: FeedMode): string {
+    const fallback = this.modes.find(m => m.id === id)?.hint ?? '';
+    return this.translation.t()(this.hintKey[id], fallback);
+  }
 
   /**
    * Surface a discreet status chip when:
@@ -66,9 +90,11 @@ export class FeedModeSwitcherComponent {
     !this.network.isOnline() || !this.data.hasFreshData()
   );
 
-  readonly offlineLabel = computed(() =>
-    this.network.isOnline() ? 'En cache' : 'Hors ligne'
-  );
+  readonly offlineLabel = computed(() => {
+    const key = this.network.isOnline() ? 'UI_CACHED' : 'UI_OFFLINE';
+    const fallback = this.network.isOnline() ? 'En cache' : 'Hors ligne';
+    return this.translation.t()(key, fallback);
+  });
 
   select(id: FeedMode) {
     if (this.active() !== id) this.mode.setMode(id);
