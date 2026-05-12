@@ -25,6 +25,7 @@ import { AdminCounterBriefsComponent } from "./admin-counter-briefs.component";
 import { AdminHealthHistoryComponent } from "./admin-health-history.component";
 import { AdminStatusBadgeComponent } from "./admin-status-badge.component";
 import { AdminAntenneComponent } from "./admin-antenne.component";
+import { AdminPushComposerComponent } from "./admin-push-composer.component";
 import { AdminLocalisationComponent } from "./admin-localisation.component";
 import { DataService } from "../../services/data.service";
 import { AuthService } from "../../services/auth.service";
@@ -47,6 +48,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
     AdminCounterBriefsComponent,
     AdminHealthHistoryComponent,
     AdminStatusBadgeComponent,
+    AdminPushComposerComponent,
   ],
   template: `
     <div
@@ -224,6 +226,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
           @case (AdminTab.ANTENNE) {
             @defer (on immediate) {
               <app-admin-antenne></app-admin-antenne>
+              <app-admin-push-composer></app-admin-push-composer>
             } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.LOCALISATION) {
