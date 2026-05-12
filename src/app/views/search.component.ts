@@ -10,6 +10,7 @@ import { ImagePerf } from '../services/image-perf.service';
 import { ARTICLE_API, IArticleApi } from '../services/api/article-api';
 import { NetworkStatusService } from '../services/network-status.service';
 import { Logger } from '../services/logger.service';
+import { TranslationService } from '../services/translation.service';
 import type { Article, PublicProfile } from '../types';
 
 interface ScoredArticle {
@@ -45,19 +46,19 @@ const MAX_ENGAGEMENT_BOOST = 4;
   template: `
     <div class="w-full h-full bg-black flex flex-col pt-12">
       <div class="px-6 shrink-0">
-        <h1 class="text-2xl font-[1000] uppercase text-white tracking-tighter mb-6">Recherche</h1>
+        <h1 class="text-2xl font-[1000] uppercase text-white tracking-tighter mb-6">{{ t()('SEARCH_TITLE') }}</h1>
 
         <div class="relative mb-6">
           <input
             type="text"
             [(ngModel)]="searchQuery"
             (ngModelChange)="onQueryChange($event)"
-            placeholder="Sujets, articles, auteurs..."
-            aria-label="Champ de recherche"
+            [placeholder]="t()('SEARCH_PLACEHOLDER')"
+            [attr.aria-label]="t()('SEARCH_TITLE')"
             class="w-full bg-zinc-900 border border-zinc-800 p-4 pl-12 text-white rounded-xl outline-none focus:border-white transition-colors" />
           <lucide-icon name="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500"></lucide-icon>
           @if (searchQuery()) {
-            <button type="button" (click)="clearQuery()" aria-label="Effacer la recherche"
+            <button type="button" (click)="clearQuery()" [attr.aria-label]="t()('SEARCH_CLEAR')"
               class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">
               <lucide-icon name="x" class="w-5 h-5"></lucide-icon>
             </button>
@@ -69,7 +70,7 @@ const MAX_ENGAGEMENT_BOOST = 4;
         @if (!searchQuery()) {
           <div class="h-full flex flex-col items-center justify-center text-zinc-600">
             <lucide-icon name="search" class="w-12 h-12 mb-4 opacity-50"></lucide-icon>
-            <p class="text-sm font-medium">Recherchez dans l'audit CakeNews</p>
+            <p class="text-sm font-medium">{{ t()('SEARCH_PROMPT') }}</p>
             <div class="flex flex-wrap justify-center gap-2 mt-6">
               @for (tag of ['Tech', 'Politique', 'Économie', 'Société']; track tag) {
                 <button type="button" (click)="setQuery(tag)"
@@ -84,7 +85,7 @@ const MAX_ENGAGEMENT_BOOST = 4;
           @if (people().length > 0) {
             <section class="mb-8">
               <h2 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3">
-                Auteurs · {{ people().length }}
+                {{ t()('SEARCH_PEOPLE_HEADING') }} · {{ people().length }}
               </h2>
               <ul class="space-y-2">
                 @for (p of people(); track p.uid) {
@@ -116,11 +117,11 @@ const MAX_ENGAGEMENT_BOOST = 4;
           @if (results().length === 0 && people().length === 0) {
             <div class="py-12 flex flex-col items-center text-zinc-600">
               <lucide-icon name="file-question" class="w-12 h-12 mb-4 opacity-50"></lucide-icon>
-              <p class="text-sm font-medium">Aucun résultat trouvé pour « {{ searchQuery() }} »</p>
+              <p class="text-sm font-medium">{{ t()('SEARCH_NO_RESULTS') }} « {{ searchQuery() }} »</p>
             </div>
           } @else if (results().length > 0) {
             <h2 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3">
-              Articles · {{ results().length }}
+              {{ t()('SEARCH_ARTICLES_HEADING') }} · {{ results().length }}
             </h2>
             <div class="space-y-6">
               @for (article of results(); track article.id) {
@@ -160,6 +161,8 @@ export class SearchViewComponent {
   private api = inject<IArticleApi>(ARTICLE_API);
   private network = inject(NetworkStatusService);
   private logger = inject(Logger);
+  private translation = inject(TranslationService);
+  protected t = this.translation.t;
 
   readonly searchQuery = signal('');
   readonly people = signal<PublicProfile[]>([]);

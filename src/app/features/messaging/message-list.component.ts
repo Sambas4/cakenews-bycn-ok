@@ -1,14 +1,17 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import { Conversation, ChatType } from '../../services/message.service';
+import { TranslationService } from '../../services/translation.service';
 
 type FilterTab = 'direct' | 'notification' | 'admin';
 
 interface TabDef {
   id: FilterTab;
+  /** Fallback label rendered when the translation key is absent. */
   label: string;
+  labelKey: string;
   icon: string;
 }
 
@@ -32,7 +35,7 @@ interface TabDef {
       <!-- Header -->
       <header class="flex items-center justify-between px-5 h-14 border-b border-white/[0.04] z-20 shrink-0">
         <div class="flex items-center gap-2">
-          <h1 class="text-[18px] font-[1000] tracking-tight text-white">Messagerie</h1>
+          <h1 class="text-[18px] font-[1000] tracking-tight text-white">{{ t()('MSG_TITLE') }}</h1>
           @if (totalUnread() > 0) {
             <span class="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#ff3b30] text-white text-[10px] font-black">
               {{ totalUnread() }}
@@ -57,7 +60,7 @@ interface TabDef {
           <div class="relative">
             <lucide-icon name="search" class="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2"></lucide-icon>
             <input type="text" [ngModel]="query()" (ngModelChange)="query.set($event)"
-              placeholder="Rechercher une conversation"
+              [placeholder]="t()('MSG_SEARCH_PLACEHOLDER')"
               class="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl pl-9 pr-9 py-2.5 text-[13px] outline-none focus:border-white/20 transition-colors" />
             @if (query()) {
               <button type="button" (click)="query.set('')" class="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">
@@ -71,15 +74,15 @@ interface TabDef {
       <!-- Segmented tabs -->
       <div class="shrink-0 px-4 pt-3 pb-2">
         <div class="flex bg-white/[0.04] border border-white/[0.06] rounded-2xl p-1">
-          @for (t of tabs; track t.id) {
-            <button type="button" (click)="setTab(t.id)"
+          @for (tab of tabs; track tab.id) {
+            <button type="button" (click)="setTab(tab.id)"
               class="relative flex-1 py-2 flex items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all"
-              [ngClass]="active() === t.id ? 'bg-white text-black shadow' : 'text-zinc-500 hover:text-white'">
-              <lucide-icon [name]="t.icon" class="w-3.5 h-3.5"></lucide-icon>
-              {{ t.label }}
-              @if (unreadFor(t.id)() > 0) {
+              [ngClass]="active() === tab.id ? 'bg-white text-black shadow' : 'text-zinc-500 hover:text-white'">
+              <lucide-icon [name]="tab.icon" class="w-3.5 h-3.5"></lucide-icon>
+              {{ t()(tab.labelKey, tab.label) }}
+              @if (unreadFor(tab.id)() > 0) {
                 <span class="absolute top-1 right-2 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-[#ff3b30] text-white text-[9px] font-black">
-                  {{ unreadFor(t.id)() }}
+                  {{ unreadFor(tab.id)() }}
                 </span>
               }
             </button>
@@ -177,10 +180,13 @@ export class MessageListComponent {
   chatSelected = output<Conversation>();
   settings = output<void>();
 
+  private translation = inject(TranslationService);
+  protected t = this.translation.t;
+
   readonly tabs: TabDef[] = [
-    { id: 'direct', label: 'Privé', icon: 'lock' },
-    { id: 'notification', label: 'Alertes', icon: 'bell' },
-    { id: 'admin', label: 'Système', icon: 'shield-check' },
+    { id: 'direct',       label: 'Privé',    labelKey: 'MSG_TAB_PRIVATE', icon: 'lock' },
+    { id: 'notification', label: 'Alertes',  labelKey: 'MSG_TAB_ALERTS',  icon: 'bell' },
+    { id: 'admin',        label: 'Système',  labelKey: 'MSG_TAB_SYSTEM',  icon: 'shield-check' },
   ];
 
   readonly active = signal<FilterTab>('direct');
@@ -223,18 +229,20 @@ export class MessageListComponent {
   });
 
   emptyTitle = computed(() => {
+    const tr = this.t();
     switch (this.active()) {
-      case 'notification': return 'Aucune alerte';
-      case 'admin': return 'Tout est calme';
-      default: return 'Aucun message';
+      case 'notification': return tr('MSG_EMPTY_NOTIF', 'Aucune alerte');
+      case 'admin':        return tr('MSG_EMPTY_ADMIN', 'Tout est calme');
+      default:             return tr('MSG_EMPTY_DIRECT', 'Aucun message');
     }
   });
 
   emptyHint = computed(() => {
+    const tr = this.t();
     switch (this.active()) {
-      case 'notification': return 'Tu seras notifié si un débat décolle ou si quelqu\'un répond à tes commentaires.';
-      case 'admin': return 'L\'équipe CakeNews te contactera ici en cas de besoin.';
-      default: return 'Démarre une conversation chiffrée avec un autre lecteur ou journaliste.';
+      case 'notification': return tr('MSG_EMPTY_NOTIF_HINT', 'Tu seras notifié si un débat décolle ou si quelqu\'un répond à tes commentaires.');
+      case 'admin':        return tr('MSG_EMPTY_ADMIN_HINT', 'L\'équipe CakeNews te contactera ici en cas de besoin.');
+      default:             return tr('MSG_EMPTY_DIRECT_HINT', 'Démarre une conversation chiffrée avec un autre lecteur ou journaliste.');
     }
   });
 

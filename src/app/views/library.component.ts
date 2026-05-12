@@ -7,36 +7,49 @@ import { DataService } from '../services/data.service';
 import type { Article } from '../types';
 import { CATEGORY_COLORS } from '../constants';
 import { ImagePerf } from '../services/image-perf.service';
+import { TranslationService } from '../services/translation.service';
 
 type LibraryKind = 'saved' | 'history' | 'likes';
 
 interface KindMeta {
-  title: string;
-  emptyTitle: string;
-  emptyHint: string;
+  titleKey: string;
+  titleFallback: string;
+  emptyTitleKey: string;
+  emptyTitleFallback: string;
+  emptyHintKey: string;
+  emptyHintFallback: string;
   icon: string;
   accent: string;
 }
 
 const KINDS: Record<LibraryKind, KindMeta> = {
   saved: {
-    title: 'Sauvegardés',
-    emptyTitle: 'Rien dans tes signets',
-    emptyHint: 'Touche le marque-page sur un article pour le retrouver ici.',
+    titleKey: 'PROFILE_SAVED',
+    titleFallback: 'Sauvegardés',
+    emptyTitleKey: 'LIBRARY_SAVED_EMPTY_TITLE',
+    emptyTitleFallback: 'Rien dans tes signets',
+    emptyHintKey: 'LIBRARY_SAVED_EMPTY_HINT',
+    emptyHintFallback: 'Touche le marque-page sur un article pour le retrouver ici.',
     icon: 'bookmark',
     accent: '#38bdf8',
   },
   history: {
-    title: 'Historique',
-    emptyTitle: 'Pas encore de lecture',
-    emptyHint: 'Les articles que tu lis viennent s\'aligner ici dans l\'ordre.',
+    titleKey: 'PROFILE_HISTORY',
+    titleFallback: 'Historique',
+    emptyTitleKey: 'LIBRARY_HISTORY_EMPTY_TITLE',
+    emptyTitleFallback: 'Pas encore de lecture',
+    emptyHintKey: 'LIBRARY_HISTORY_EMPTY_HINT',
+    emptyHintFallback: 'Les articles que tu lis viennent s\'aligner ici dans l\'ordre.',
     icon: 'history',
     accent: '#a78bfa',
   },
   likes: {
-    title: 'Likés',
-    emptyTitle: 'Aucun like pour le moment',
-    emptyHint: 'Touche le cœur d\'un article que tu approuves pour l\'archiver.',
+    titleKey: 'PROFILE_LIKES',
+    titleFallback: 'Likés',
+    emptyTitleKey: 'LIBRARY_LIKES_EMPTY_TITLE',
+    emptyTitleFallback: 'Aucun like pour le moment',
+    emptyHintKey: 'LIBRARY_LIKES_EMPTY_HINT',
+    emptyHintFallback: 'Touche le cœur d\'un article que tu approuves pour l\'archiver.',
     icon: 'heart',
     accent: '#fb7185',
   },
@@ -60,13 +73,13 @@ const KINDS: Record<LibraryKind, KindMeta> = {
     <div class="w-full h-full bg-black flex flex-col text-white">
       <!-- Top bar -->
       <header class="flex items-center justify-between px-5 h-14 border-b border-white/[0.04] z-10 shrink-0">
-        <button type="button" (click)="goBack()" aria-label="Retour"
+        <button type="button" (click)="goBack()" [attr.aria-label]="t()('UI_BACK')"
           class="w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center hover:bg-white/10 transition-colors">
           <lucide-icon name="chevron-left" class="w-4 h-4"></lucide-icon>
         </button>
         <div class="flex items-center gap-2">
           <lucide-icon [name]="meta().icon" class="w-4 h-4" [style.color]="meta().accent"></lucide-icon>
-          <h1 class="text-[14px] font-[1000] tracking-tight">{{ meta().title }}</h1>
+          <h1 class="text-[14px] font-[1000] tracking-tight">{{ t()(meta().titleKey, meta().titleFallback) }}</h1>
         </div>
         <span class="text-[10px] font-bold tabular-nums text-zinc-500">{{ articles().length }}</span>
       </header>
@@ -78,8 +91,8 @@ const KINDS: Record<LibraryKind, KindMeta> = {
             <div class="w-16 h-16 rounded-3xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-4">
               <lucide-icon [name]="meta().icon" class="w-7 h-7 text-zinc-500"></lucide-icon>
             </div>
-            <p class="text-[13px] font-bold text-white">{{ meta().emptyTitle }}</p>
-            <p class="text-[11.5px] text-zinc-500 mt-2 leading-snug max-w-[280px]">{{ meta().emptyHint }}</p>
+            <p class="text-[13px] font-bold text-white">{{ t()(meta().emptyTitleKey, meta().emptyTitleFallback) }}</p>
+            <p class="text-[11.5px] text-zinc-500 mt-2 leading-snug max-w-[280px]">{{ t()(meta().emptyHintKey, meta().emptyHintFallback) }}</p>
           </div>
         } @else {
           <ul class="px-3 pt-3 space-y-2">
@@ -122,6 +135,8 @@ export class LibraryViewComponent {
   private data = inject(DataService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private translation = inject(TranslationService);
+  protected t = this.translation.t;
   private location = inject(Location);
   private imagePerf = inject(ImagePerf);
 
