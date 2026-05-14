@@ -35,6 +35,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import webpush from 'https://esm.sh/web-push@3?bundle';
 import { create as createJwt, getNumericDate } from 'https://deno.land/x/[email protected]/mod.ts';
+import { buildCors, handlePreflight } from '../_shared/cors.ts';
 
 declare const Deno: {
   env: { get: (key: string) => string | undefined };
@@ -61,11 +62,7 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 }
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const METHODS = ['POST', 'OPTIONS'];
 
 interface Audience {
   type: 'user' | 'all' | 'role' | 'follows';
@@ -96,7 +93,9 @@ interface DispatchOutcome {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  const preflight = handlePreflight(req, METHODS);
+  if (preflight) return preflight;
+  const cors = buildCors(req, METHODS);
   if (req.method !== 'POST') return new Response('method not allowed', { status: 405, headers: cors });
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -105,19 +104,19 @@ Deno.serve(async (req) => {
   const authorization = req.headers.get('Authorization');
   const isService = authorization === `Bearer ${SERVICE_ROLE_KEY}`;
   if (!isService) {
-    if (!authorization?.startsWith('Bearer ')) return json(401, { error: 'missing_bearer_token' });
+    if (!authorization?.startsWith('Bearer ')) return json(401, { error: 'missing_bearer_token' }, cors);
     const { data: { user } } = await admin.auth.getUser(authorization.slice('Bearer '.length));
-    if (!user) return json(401, { error: 'invalid_token' });
+    if (!user) return json(401, { error: 'invalid_token' }, cors);
     const role = (user.app_metadata?.role as string | undefined) ?? 'USER';
     if (!['EDITOR', 'MODERATOR', 'ADMIN', 'SUPER_ADMIN'].includes(role)) {
-      return json(403, { error: 'forbidden' });
+      return json(403, { error: 'forbidden' }, cors);
     }
   }
 
   let body: { audience: Audience; payload: PushPayload };
-  try { body = await req.json(); } catch { return json(400, { error: 'bad_json' }); }
+  try { body = await req.json(); } catch { return json(400, { error: 'bad_json' }, cors); }
   if (!body?.audience?.type || !body?.payload?.title) {
-    return json(400, { error: 'missing_audience_or_payload' });
+    return json(400, { error: 'missing_audience_or_payload' }, cors);
   }
 
   const subscriptions = await resolveAudience(admin, body.audience);
@@ -136,7 +135,7 @@ Deno.serve(async (req) => {
     }
   }));
 
-  return json(200, { audience: subscriptions.length, ...stats });
+  return json(200, { audience: subscriptions.length, ...stats }, cors);
 });
 
 // ----------------------------------------------------------------------------
@@ -347,7 +346,7 @@ async function importPkcs8(pem: string, family: 'RSA' | 'ECDSA'): Promise<Crypto
   );
 }
 
-function json(status: number, body: unknown): Response {
+function json(status: number, body: unknown, cors: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', ...cors },

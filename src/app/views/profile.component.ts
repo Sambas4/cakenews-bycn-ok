@@ -7,6 +7,7 @@ import { AuthService } from '../services/auth.service';
 import { UserService } from '../services/user.service';
 import { ToastService } from '../services/toast.service';
 import { Logger } from '../services/logger.service';
+import { TranslationService } from '../services/translation.service';
 
 import { ProfileHeroComponent } from './profile/profile-hero.component';
 import { ProfileActivityComponent } from './profile/profile-activity.component';
@@ -37,7 +38,7 @@ type ProfileTab = 'activity' | 'settings';
           class="w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center hover:bg-white/10 transition-colors">
           <lucide-icon name="chevron-left" class="w-4 h-4"></lucide-icon>
         </button>
-        <h1 class="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">Mon Espace</h1>
+        <h1 class="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">{{ t()('PROFILE_MY_SPACE') }}</h1>
         @if (auth.isAdmin()) {
           <button type="button" (click)="goToAdmin()"
             class="w-9 h-9 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 flex items-center justify-center hover:bg-indigo-500/25 transition-colors">
@@ -57,12 +58,12 @@ type ProfileTab = 'activity' | 'settings';
           <button type="button" (click)="tab.set('activity')"
             class="flex-1 py-2 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all"
             [ngClass]="tab() === 'activity' ? 'bg-white text-black shadow' : 'text-zinc-500 hover:text-white'">
-            Activité
+            {{ t()('PROFILE_TAB_ACTIVITY') }}
           </button>
           <button type="button" (click)="tab.set('settings')"
             class="flex-1 py-2 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all"
             [ngClass]="tab() === 'settings' ? 'bg-white text-black shadow' : 'text-zinc-500 hover:text-white'">
-            Réglages
+            {{ t()('PROFILE_TAB_SETTINGS') }}
           </button>
         </div>
       </div>
@@ -127,6 +128,8 @@ export class ProfileViewComponent {
   private router = inject(Router);
   private toast = inject(ToastService);
   private logger = inject(Logger);
+  private translation = inject(TranslationService);
+  protected t = this.translation.t;
 
   readonly tab = signal<ProfileTab>('activity');
   readonly showEdit = signal(false);

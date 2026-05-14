@@ -23,6 +23,7 @@
  * sensitive (no row counts, no tenant info, just up/down booleans).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { buildCors, handlePreflight } from '../_shared/cors.ts';
 
 declare const Deno: {
   env: { get: (key: string) => string | undefined };
@@ -32,11 +33,7 @@ declare const Deno: {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-};
+const METHODS = ['GET', 'OPTIONS'];
 
 interface ComponentCheck {
   ok: boolean;
@@ -45,8 +42,10 @@ interface ComponentCheck {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
-  if (req.method !== 'GET') return json(405, { status: 'error', error: 'method_not_allowed' });
+  const preflight = handlePreflight(req, METHODS);
+  if (preflight) return preflight;
+  const cors = buildCors(req, METHODS);
+  if (req.method !== 'GET') return json(405, { status: 'error', error: 'method_not_allowed' }, cors);
 
   const checks: Record<string, ComponentCheck> = {};
 
@@ -77,10 +76,10 @@ Deno.serve(async (req) => {
     status: allOk ? 'ok' : 'degraded',
     checks,
     ts: new Date().toISOString(),
-  });
+  }, cors);
 });
 
-function json(status: number, body: unknown): Response {
+function json(status: number, body: unknown, cors: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', ...cors },

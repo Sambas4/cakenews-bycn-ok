@@ -7,6 +7,7 @@ import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 import { Logger } from '../../services/logger.service';
 import { FocusTrapDirective } from '../../directives/focus-trap.directive';
+import { TranslationService } from '../../services/translation.service';
 
 const AVATAR_BG = ['#7ae25c', '#F9A8D4', '#C4B5FD', '#93C5FD', '#FDE047', '#FDBA74', '#F472B6', '#FB7185'];
 const AVATAR_SEEDS = [
@@ -33,7 +34,7 @@ const AVATAR_SEEDS = [
           <button type="button" (click)="close.emit()" class="text-zinc-400 hover:text-white p-2 -ml-2 rounded-full hover:bg-white/5 transition-colors">
             <lucide-icon name="x" class="w-5 h-5"></lucide-icon>
           </button>
-          <h2 class="text-[12px] font-black uppercase tracking-[0.2em] text-zinc-300">Éditer le profil</h2>
+          <h2 class="text-[12px] font-black uppercase tracking-[0.2em] text-zinc-300">{{ t()('PROFILE_EDIT_TITLE') }}</h2>
           <button type="button" (click)="save()" [disabled]="saving() || !canSave()"
             class="text-[11px] font-black uppercase tracking-widest text-[#7ae25c] disabled:opacity-40 disabled:cursor-not-allowed">
             @if (saving()) {
@@ -58,7 +59,7 @@ const AVATAR_SEEDS = [
 
           <!-- Avatar seed picker -->
           <section>
-            <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Avatar</h3>
+            <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">{{ t()('PROFILE_AVATAR') }}</h3>
             <div class="flex gap-2 overflow-x-auto hide-scrollbar -mx-5 px-5 pb-2">
               @for (seed of seeds; track seed; let i = $index) {
                 <button type="button" (click)="seedIdx.set(i)"
@@ -73,7 +74,7 @@ const AVATAR_SEEDS = [
 
           <!-- Bg color -->
           <section>
-            <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Couleur de fond</h3>
+            <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">{{ t()('PROFILE_AVATAR_BG') }}</h3>
             <div class="flex gap-2 flex-wrap">
               @for (c of bgColors; track c) {
                 <button type="button" (click)="avatarBg.set(c)"
@@ -86,7 +87,7 @@ const AVATAR_SEEDS = [
 
           <!-- Display name -->
           <section>
-            <label class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 block">Nom affiché</label>
+            <label class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 block">{{ t()('PROFILE_DISPLAY_NAME') }}</label>
             <input type="text" [(ngModel)]="displayName" maxlength="40"
               class="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white text-[14px] font-semibold outline-none focus:border-[#7ae25c] transition-colors"
               placeholder="Ton nom public" />
@@ -94,7 +95,7 @@ const AVATAR_SEEDS = [
 
           <!-- Username -->
           <section>
-            <label class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 block">@ pseudo</label>
+            <label class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 block">{{ t()('PROFILE_USERNAME') }}</label>
             <div class="relative">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-[14px] font-semibold">&#64;</span>
               <input type="text" [(ngModel)]="username" maxlength="24"
@@ -102,15 +103,15 @@ const AVATAR_SEEDS = [
                 class="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-9 pr-4 py-3 text-white text-[14px] font-semibold outline-none focus:border-[#7ae25c] transition-colors"
                 placeholder="ton_pseudo" />
             </div>
-            <p class="text-[10px] text-zinc-500 mt-1.5">Lettres, chiffres et _ uniquement, 3 à 24 caractères.</p>
+            <p class="text-[10px] text-zinc-500 mt-1.5">{{ t()('PROFILE_USERNAME_HINT') }}</p>
           </section>
 
           <!-- Bio -->
           <section>
-            <label class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 block">Bio</label>
+            <label class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 block">{{ t()('PROFILE_BIO') }}</label>
             <textarea [(ngModel)]="bio" maxlength="160" rows="3"
               class="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white text-[14px] outline-none focus:border-[#7ae25c] transition-colors resize-none"
-              placeholder="Quelques mots sur toi…"></textarea>
+              [placeholder]="t()('PROFILE_BIO_PLACEHOLDER')"></textarea>
             <div class="flex justify-end text-[10px] text-zinc-600 mt-1">{{ bio().length }}/160</div>
           </section>
 
@@ -126,6 +127,8 @@ export class ProfileEditComponent {
   private auth = inject(AuthService);
   private toast = inject(ToastService);
   private logger = inject(Logger);
+  private translation = inject(TranslationService);
+  protected t = this.translation.t;
 
   readonly seeds = AVATAR_SEEDS;
   readonly bgColors = AVATAR_BG;

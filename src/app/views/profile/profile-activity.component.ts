@@ -9,6 +9,7 @@ import { Router } from '@angular/router';
 import { CognitiveRadarComponent } from './cognitive-radar.component';
 import { TrustTimelineComponent } from './trust-timeline.component';
 import { ImagePerf } from '../../services/image-perf.service';
+import { TranslationService } from '../../services/translation.service';
 
 interface AdnSlice {
   cat: string;
@@ -40,7 +41,7 @@ interface AdnSlice {
         <header class="flex items-center justify-between mb-4 relative">
           <div class="flex items-center gap-2">
             <lucide-icon name="pie-chart" class="w-4 h-4 text-[#7ae25c]"></lucide-icon>
-            <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-[#7ae25c]">Ton ADN Lecteur</h3>
+            <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-[#7ae25c]">{{ t()('PROFILE_DNA') }}</h3>
           </div>
           <span class="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
             {{ totalSignals() }} signaux
@@ -81,7 +82,7 @@ interface AdnSlice {
       <!-- Library -->
       <section>
         <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">
-          Bibliothèque
+          {{ t()('PROFILE_LIBRARY') }}
         </h3>
 
         <div class="space-y-2">
@@ -92,7 +93,7 @@ interface AdnSlice {
                 <lucide-icon name="bookmark" class="w-4 h-4 text-[#38bdf8]"></lucide-icon>
               </div>
               <div class="flex flex-col items-start">
-                <span class="text-[13px] font-black uppercase tracking-wider text-white">Sauvegardés</span>
+                <span class="text-[13px] font-black uppercase tracking-wider text-white">{{ t()('PROFILE_SAVED') }}</span>
                 <span class="text-[10px] text-zinc-500">{{ savedCount() }} article(s)</span>
               </div>
             </div>
@@ -106,7 +107,7 @@ interface AdnSlice {
                 <lucide-icon name="history" class="w-4 h-4 text-violet-300"></lucide-icon>
               </div>
               <div class="flex flex-col items-start">
-                <span class="text-[13px] font-black uppercase tracking-wider text-white">Historique</span>
+                <span class="text-[13px] font-black uppercase tracking-wider text-white">{{ t()('PROFILE_HISTORY') }}</span>
                 <span class="text-[10px] text-zinc-500">{{ readCount() }} lecture(s)</span>
               </div>
             </div>
@@ -120,7 +121,7 @@ interface AdnSlice {
                 <lucide-icon name="heart" class="w-4 h-4 text-rose-400"></lucide-icon>
               </div>
               <div class="flex flex-col items-start">
-                <span class="text-[13px] font-black uppercase tracking-wider text-white">Likés</span>
+                <span class="text-[13px] font-black uppercase tracking-wider text-white">{{ t()('PROFILE_LIKES') }}</span>
                 <span class="text-[10px] text-zinc-500">{{ likedCount() }} article(s)</span>
               </div>
             </div>
@@ -133,7 +134,7 @@ interface AdnSlice {
       @if (recentArticles().length > 0) {
         <section>
           <h3 class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 ml-1">
-            Reprends ta lecture
+            {{ t()('PROFILE_RESUME_READING') }}
           </h3>
           <div class="flex gap-3 overflow-x-auto hide-scrollbar -mx-6 px-6 pb-2">
             @for (article of recentArticles(); track article.id) {
@@ -169,6 +170,8 @@ export class ProfileActivityComponent {
   private dataService = inject(DataService);
   private router = inject(Router);
   private imagePerf = inject(ImagePerf);
+  private translation = inject(TranslationService);
+  protected t = this.translation.t;
 
   thumb(url: string | undefined): string {
     return this.imagePerf.optimised(url, 140, { quality: 70 });

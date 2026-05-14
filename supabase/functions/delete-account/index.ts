@@ -16,6 +16,7 @@
  * see PRIVACY.md once the privacy policy lands.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { buildCors, handlePreflight } from '../_shared/cors.ts';
 
 // `Deno` is available at runtime under the Supabase Edge Functions
 // host. We declare the namespace here so this file type-checks in
@@ -29,19 +30,17 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const METHODS = ['POST', 'OPTIONS'];
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  const preflight = handlePreflight(req, METHODS);
+  if (preflight) return preflight;
+  const cors = buildCors(req, METHODS);
   if (req.method !== 'POST') return new Response('method not allowed', { status: 405, headers: cors });
 
   const authorization = req.headers.get('Authorization');
   if (!authorization?.startsWith('Bearer ')) {
-    return json(401, { error: 'missing_bearer_token' });
+    return json(401, { error: 'missing_bearer_token' }, cors);
   }
 
   // Resolve the caller from the JWT.
@@ -49,7 +48,7 @@ Deno.serve(async (req) => {
     global: { headers: { Authorization: authorization } },
   });
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) return json(401, { error: 'invalid_token' });
+  if (authErr || !user) return json(401, { error: 'invalid_token' }, cors);
 
   // Hard-delete via the service role.
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -65,12 +64,12 @@ Deno.serve(async (req) => {
   });
 
   const { error: delErr } = await admin.auth.admin.deleteUser(user.id);
-  if (delErr) return json(500, { error: 'delete_failed', detail: delErr.message });
+  if (delErr) return json(500, { error: 'delete_failed', detail: delErr.message }, cors);
 
-  return json(200, { ok: true });
+  return json(200, { ok: true }, cors);
 });
 
-function json(status: number, body: unknown): Response {
+function json(status: number, body: unknown, cors: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', ...cors },
