@@ -76,6 +76,22 @@ bootstrapApplication(AppComponent, {
 // Register service worker (production only) — never block the main bootstrap.
 if ('serviceWorker' in navigator && (import.meta as any)?.env?.MODE === 'production') {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => { /* swallow */ });
+    navigator.serviceWorker.register('/sw.js')
+      .then(async () => {
+        // First-load offline: ask the SW to precache every JS/CSS asset
+        // mounted on the current document. After this the next cold
+        // start works without network — the user can re-open the app
+        // in the metro and still browse the cached articles.
+        const reg = await navigator.serviceWorker.ready;
+        const target = reg.active ?? navigator.serviceWorker.controller;
+        if (!target) return;
+        const scripts = Array.from(document.querySelectorAll<HTMLScriptElement>('script[src]'))
+          .map(s => s.src);
+        const styles = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))
+          .map(l => l.href);
+        const urls = [...scripts, ...styles].filter(u => u.startsWith(window.location.origin));
+        if (urls.length > 0) target.postMessage({ type: 'PRECACHE_ASSETS', urls });
+      })
+      .catch(() => { /* swallow */ });
   });
 }

@@ -6,6 +6,7 @@ import { BottomNavComponent } from './components/bottom-nav.component';
 import { VibeTickerComponent } from './components/ui/vibe-ticker.component';
 import { GlobalModalRegistryComponent } from './components/global-modal-registry.component';
 import { EmailVerificationBannerComponent } from './components/email-verification-banner.component';
+import { OfflineBannerComponent } from './components/ui/offline-banner.component';
 import { AuthService } from './services/auth.service';
 import { MotionPreferenceService } from './services/motion-preference.service';
 import { SentryBindingService } from './services/sentry-binding.service';
@@ -21,6 +22,7 @@ import { ConsentService } from './services/consent.service';
     VibeTickerComponent,
     GlobalModalRegistryComponent,
     EmailVerificationBannerComponent,
+    OfflineBannerComponent,
   ],
   template: `
     <div class="h-[100dvh] w-full bg-black text-white flex flex-col font-sans overflow-hidden relative">
@@ -45,6 +47,9 @@ import { ConsentService } from './services/consent.service';
         @if (showBottomNav) {
           <app-bottom-nav></app-bottom-nav>
         }
+
+        <!-- Persistent offline pill, only visible when navigator.onLine is false -->
+        <app-offline-banner></app-offline-banner>
 
         <!-- Global Modals -->
         <app-global-modal-registry></app-global-modal-registry>

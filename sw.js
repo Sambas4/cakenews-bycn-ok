@@ -48,6 +48,27 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
     return;
   }
+  if (event.data?.type === 'PRECACHE_ASSETS' && Array.isArray(event.data.urls)) {
+    // First-load offline support: the client lists every <script src>
+    // and <link rel="stylesheet"> currently mounted and asks the SW
+    // to warm the STATIC cache. After this completes, a cold reload
+    // with no network is fully functional.
+    const urls = event.data.urls
+      .filter((u) => typeof u === 'string')
+      .slice(0, 60);
+    event.waitUntil((async () => {
+      const cache = await caches.open(STATIC);
+      await Promise.all(urls.map(async (url) => {
+        try {
+          const cached = await cache.match(url);
+          if (cached) return;
+          const resp = await fetch(url, { credentials: 'same-origin' });
+          if (resp.ok) await cache.put(url, resp);
+        } catch { /* network error — skip */ }
+      }));
+    })());
+    return;
+  }
   if (event.data?.type === 'PRECACHE_IMAGES' && Array.isArray(event.data.urls)) {
     // Best-effort image pre-warm so the next cold-start (possibly
     // offline) renders covers from cache. Capped to avoid abuse.

@@ -47,6 +47,10 @@ export default defineConfig(() => ({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
+          // Split the Angular framework so /auth doesn't drag forms +
+          // platform-browser-dynamic into a route that never uses them.
+          if (id.includes('@angular/forms')) return 'ng-forms';
+          if (id.includes('@angular/router')) return 'ng-router';
           if (id.includes('@angular')) return 'ng';
           if (id.includes('@supabase')) return 'supabase';
           if (id.includes('lucide-angular')) return 'icons';

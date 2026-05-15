@@ -29,6 +29,7 @@ const FR_TRANSLATIONS: Record<string, string> = {
   'UI_OFFLINE': 'Hors ligne',
   'UI_CACHED': 'En cache',
   'UI_RETRY': 'Réessayer',
+  'OFFLINE_BANNER': 'Hors ligne — contenu en cache',
 
   // -- Article interactions
   'ACTION_LIKE': 'J\'aime',
@@ -186,6 +187,7 @@ const EN_TRANSLATIONS: Record<string, string> = {
   'UI_OFFLINE': 'Offline',
   'UI_CACHED': 'Cached',
   'UI_RETRY': 'Retry',
+  'OFFLINE_BANNER': 'Offline — cached content',
 
   // -- Article interactions
   'ACTION_LIKE': 'Like',
