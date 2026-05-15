@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import { ReportTicket, AuditLog } from '../../types';
 import { SupabaseService } from '../../services/supabase.service';
+import { Logger } from '../../services/logger.service';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 type AuditViewMode = 'truth' | 'ethics' | 'tech' | 'archives';
@@ -318,6 +319,7 @@ export class AdminAuditComponent implements OnInit, OnDestroy {
   
   private channelReports: RealtimeChannel | null = null;
   private supabaseService = inject(SupabaseService);
+  private logger = inject(Logger);
 
   async ngOnInit() {
       try {
@@ -326,7 +328,7 @@ export class AdminAuditComponent implements OnInit, OnDestroy {
               this.setReports(data as ReportTicket[]);
           }
       } catch (e) {
-          console.warn('Failed initial fetch reports', e);
+          this.logger.warn('admin.reports.fetch', e);
       }
 
       this.channelReports = this.supabaseService.client.channel('public:reports')
@@ -393,7 +395,7 @@ export class AdminAuditComponent implements OnInit, OnDestroy {
               assignedTo: 'Moi (Admin)'
           }).eq('id', report.id);
       } catch (error) {
-          console.error("Erreur d'assignation:", error);
+          this.logger.error('admin.report.assign', error);
       }
   }
 
@@ -414,7 +416,7 @@ export class AdminAuditComponent implements OnInit, OnDestroy {
           }).eq('id', report.id);
           this.internalNote = '';
       } catch (error) {
-          console.error("Erreur d'ajout de note:", error);
+          this.logger.error('admin.report.note', error);
       }
   }
 
@@ -447,7 +449,7 @@ export class AdminAuditComponent implements OnInit, OnDestroy {
               status: newStatus
           }).eq('id', report.id);
       } catch (error) {
-          console.error("Erreur de verdict:", error);
+          this.logger.error('admin.report.verdict', error);
       }
   }
 

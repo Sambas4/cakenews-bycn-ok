@@ -4,7 +4,6 @@ import { LucideAngularModule } from 'lucide-angular';
 import { BroadcastService } from '../../services/broadcast.service';
 import { ModalService } from '../../services/modal.service';
 import { TranslationService } from '../../services/translation.service';
-import { MOCK_TICKER_DATA } from '../../data/mockData';
 
 interface TickerItem {
     rank: number;
@@ -28,6 +27,7 @@ interface TickerGroup {
   standalone: true,
   imports: [CommonModule, LucideAngularModule],
   template: `
+    @if (loopGroups().length > 0) {
     <div class="relative w-full h-[40px] md:h-[48px] bg-black border-b border-white/10 flex items-center z-[60] flex-shrink-0 pointer-events-none">
       <!-- INDICATEUR LIVE FIXE -->
       <div class="absolute left-0 top-0 bottom-0 px-3 md:px-4 bg-black z-20 flex items-center gap-1.5 md:gap-2 border-r border-white/10 pointer-events-auto">
@@ -107,6 +107,7 @@ interface TickerGroup {
         </div>
       </div>
     </div>
+    }
   `
 })
 export class VibeTickerComponent {
@@ -167,25 +168,13 @@ export class VibeTickerComponent {
         });
     };
 
-    if (config.rankingMode === 'MANUAL' && config.manualRankings.length > 0) {
+    // The ticker only renders curated, real data. Manual rankings come
+    // from the admin AntENNE console; until an admin populates them the
+    // ticker stays empty (the component hides itself via `loopGroups`).
+    if (config.manualRankings.length > 0) {
         return groupManualEntries(config.manualRankings);
     }
-
-    if (config.rankingMode === 'HYBRID') {
-        const pinnedNames = new Set(config.manualRankings.map(r => r.userName));
-        const pinnedGroups = groupManualEntries(config.manualRankings);
-        const filteredAlgoGroups = MOCK_TICKER_DATA.map((group: any) => ({
-            ...group,
-            users: group.users.filter((u: any) => !pinnedNames.has(u.name)).map((u: any) => ({...u, isUrgent: false}))
-        })).filter((group: any) => group.users.length > 0);
-
-        return [...pinnedGroups, ...filteredAlgoGroups] as TickerGroup[];
-    }
-
-    return MOCK_TICKER_DATA.map((g: any) => ({
-        ...g,
-        users: g.users.map((u: any) => ({...u, isUrgent: false}))
-    })) as TickerGroup[];
+    return [];
   });
 
   loopGroups = computed(() => [...this.displayData(), ...this.displayData()]);

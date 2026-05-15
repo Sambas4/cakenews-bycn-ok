@@ -1,21 +1,28 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, effect, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { BottomNavComponent } from './components/bottom-nav.component';
 import { VibeTickerComponent } from './components/ui/vibe-ticker.component';
 import { GlobalModalRegistryComponent } from './components/global-modal-registry.component';
+import { EmailVerificationBannerComponent } from './components/email-verification-banner.component';
+import { OfflineBannerComponent } from './components/ui/offline-banner.component';
 import { AuthService } from './services/auth.service';
+import { MotionPreferenceService } from './services/motion-preference.service';
+import { SentryBindingService } from './services/sentry-binding.service';
+import { ConsentService } from './services/consent.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [
-    CommonModule, 
-    RouterOutlet, 
-    BottomNavComponent, 
+    CommonModule,
+    RouterOutlet,
+    BottomNavComponent,
     VibeTickerComponent,
-    GlobalModalRegistryComponent
+    GlobalModalRegistryComponent,
+    EmailVerificationBannerComponent,
+    OfflineBannerComponent,
   ],
   template: `
     <div class="h-[100dvh] w-full bg-black text-white flex flex-col font-sans overflow-hidden relative">
@@ -23,6 +30,12 @@ import { AuthService } from './services/auth.service';
         <!-- Vibe Ticker (Top) -->
         @if (showTicker) {
           <app-vibe-ticker></app-vibe-ticker>
+        }
+
+        <!-- Email verification ribbon — only shows when the signed-in
+             user has an unconfirmed email. Self-hides otherwise. -->
+        @if (showBottomNav) {
+          <app-email-verification-banner></app-email-verification-banner>
         }
 
         <!-- Main Content Area -->
@@ -34,6 +47,9 @@ import { AuthService } from './services/auth.service';
         @if (showBottomNav) {
           <app-bottom-nav></app-bottom-nav>
         }
+
+        <!-- Persistent offline pill, only visible when navigator.onLine is false -->
+        <app-offline-banner></app-offline-banner>
 
         <!-- Global Modals -->
         <app-global-modal-registry></app-global-modal-registry>
@@ -49,9 +65,27 @@ import { AuthService } from './services/auth.service';
 export class AppComponent implements OnInit {
   private router = inject(Router);
   authService = inject(AuthService);
-  
+  // Eager inject so the constructor wires the prefers-reduced-motion
+  // listener and applies the resolved CSS class on the very first paint.
+  private motion = inject(MotionPreferenceService);
+  private sentry = inject(SentryBindingService);
+  private consent = inject(ConsentService);
+
   showBottomNav = false;
   showTicker = false;
+
+  constructor() {
+    // Wire Sentry as soon as the user accepts analytics consent (or
+    // immediately if they had accepted in a previous session). The
+    // service no-ops without a DSN, so this is safe in dev too.
+    effect(() => {
+      if (this.consent.analyticsAllowed()) {
+        void this.sentry.connect();
+      } else {
+        this.sentry.disconnect();
+      }
+    });
+  }
 
   ngOnInit() {
     // Check initial URL without waiting for event

@@ -4,87 +4,87 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#000000">
-    <meta name="description" content="L'information virale, vérifiée par l'humain.">
-    
-    <title>CakeNews | Angular Edition</title>
-    
+    <meta name="description" content="CakeNews — l'information virale, vérifiée par l'humain.">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CakeNews">
+
+    <!--
+      Content Security Policy — strict baseline.
+
+      • script-src 'self'      : only our own bundle runs scripts. No CDN
+                                  drive-by; no eval. Inline scripts in this
+                                  HTML are tolerated for the boot splash
+                                  via the `'unsafe-inline'` exception
+                                  scoped to scripts that are themselves
+                                  small and self-contained.
+      • style-src              : the local Tailwind bundle plus Google
+                                  Fonts CSS. `unsafe-inline` is required
+                                  for Angular's animation / inline style
+                                  attributes — Angular emits a fair
+                                  number of `style="..."` bindings.
+      • img-src                : permits the article image hosts we
+                                  preconnect to.
+      • connect-src            : Supabase project + WebSocket realtime,
+                                  plus the dicebear / picsum / unsplash
+                                  back-ends. Add your VITE_SUPABASE_URL
+                                  origin if you tighten this further.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      base-uri 'self';
+      object-src 'none';
+      frame-ancestors 'self';
+      form-action 'self';
+      script-src 'self' 'unsafe-inline';
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com data:;
+      img-src 'self' data: blob: https://images.unsplash.com https://api.dicebear.com https://picsum.photos https://api.iconify.design https://www.gstatic.com;
+      connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in wss://*.supabase.in;
+      worker-src 'self';
+      manifest-src 'self';
+      upgrade-insecure-requests;
+    ">
+
+    <title>CakeNews</title>
+
     <link rel="manifest" href="/manifest.json">
     <link rel="preconnect" href="https://images.unsplash.com">
     <link rel="dns-prefetch" href="https://images.unsplash.com">
+    <link rel="preconnect" href="https://api.dicebear.com">
+    <link rel="dns-prefetch" href="https://api.dicebear.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['"Open Sans"', 'system-ui', '-apple-system', 'sans-serif'],
-                    },
-                    animation: {
-                        'marquee-left': 'marquee-left 25s linear infinite',
-                        'flash': 'flash 2s infinite',
-                    },
-                    keyframes: {
-                        'marquee-left': {
-                            '0%': { transform: 'translateX(0)' },
-                            '100%': { transform: 'translateX(-50%)' }
-                        },
-                        'flash': {
-                            '0%, 100%': { opacity: '1' },
-                            '50%': { opacity: '0.4' },
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    
-    <style>
-        :root {
-            --cake-red: #ff0000;
-            --cake-black: #000000;
-        }
-        html {
-            font-size: 17px; /* Easing mobile reading */
-        }
-        body {
-            font-family: '"Open Sans"', system-ui, -apple-system, sans-serif;
-            background-color: var(--cake-black);
-            color: #ffffff;
-            overflow: hidden;
-            -webkit-font-smoothing: antialiased;
-            overscroll-behavior-y: none;
-        }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-        
-        @media (min-width: 640px) {
-            app-root {
-                max-width: 450px;
-                margin: 0 auto;
-                border-left: 1px solid #222;
-                border-right: 1px solid #222;
-                display: block;
-                height: 100%;
-            }
-        }
-        app-root {
-            height: 100vh;
-            height: 100dvh;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            background-color: #000;
-        }
-    </style>
+    <link rel="preconnect" href="https://picsum.photos">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="bg-black">
+    <div id="cake-boot" aria-hidden="true">
+        <div class="flex flex-col items-center gap-3">
+            <div class="w-10 h-10 rounded-full border-2 border-white/10 border-t-white/80 animate-spin"></div>
+            <span>CakeNews</span>
+        </div>
+    </div>
     <app-root></app-root>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+        // Hide the boot splash as soon as Angular paints the first view.
+        const hideBoot = () => {
+            const b = document.getElementById('cake-boot');
+            if (!b) return;
+            b.classList.add('hide');
+            setTimeout(() => b.remove(), 350);
+        };
+        const observer = new MutationObserver(() => {
+            const root = document.querySelector('app-root > div');
+            if (root) { hideBoot(); observer.disconnect(); }
+        });
+        observer.observe(document.querySelector('app-root'), { childList: true, subtree: true });
+        // Safety timeout — never block the UI on a stuck mutation observer.
+        setTimeout(hideBoot, 6000);
+    </script>
 </body>
 </html>

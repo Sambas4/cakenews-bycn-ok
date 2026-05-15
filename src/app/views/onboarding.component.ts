@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../services/user.service';
+import { Logger } from '../services/logger.service';
 
 type Category = 'Vêtements Noirs' | 'Vêtements Blancs';
 
@@ -81,8 +82,11 @@ type Category = 'Vêtements Noirs' | 'Vêtements Blancs';
               <div class="flex gap-2 justify-between">
                 @for(color of bgColors; track color) {
                    <button
+                     type="button"
+                     [attr.aria-label]="'Couleur ' + color"
+                     [attr.aria-pressed]="selectedColor() === color"
                      (click)="selectedColor.set(color)"
-                     class="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 transition-transform cursor-pointer hover:scale-110"
+                     class="w-11 h-11 rounded-full border-2 transition-transform cursor-pointer hover:scale-110 flex items-center justify-center"
                      [ngStyle]="{ 'background-color': color }"
                      [ngClass]="selectedColor() === color ? 'border-[#0f2814] scale-110 shadow-md' : 'border-black/10'"
                    ></button>
@@ -115,6 +119,7 @@ export class OnboardingViewComponent {
   private authService = inject(AuthService);
   private userService = inject(UserService);
   private router = inject(Router);
+  private logger = inject(Logger);
 
   username = signal('');
   
@@ -195,8 +200,8 @@ export class OnboardingViewComponent {
 
       this.router.navigate(['/feed']);
     } catch (e: any) {
-      console.error(e);
-      this.errorMessage.set("Une erreur est survénue. Veuillez réessayer.");
+      this.logger.error('onboarding.save', e);
+      this.errorMessage.set("Une erreur est survenue. Veuillez réessayer.");
     } finally {
       this.isSaving.set(false);
     }

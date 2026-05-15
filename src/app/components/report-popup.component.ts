@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import { TranslationService } from '../services/translation.service';
+import { FocusTrapDirective } from '../directives/focus-trap.directive';
 
 type ReportCategory = 'truth' | 'ethics' | 'tech';
 type ReportStep = 'selection' | 'description' | 'evidence' | 'review' | 'success';
@@ -10,9 +11,11 @@ type ReportStep = 'selection' | 'description' | 'evidence' | 'review' | 'success
 @Component({
   selector: 'app-report-popup',
   standalone: true,
-  imports: [CommonModule, FormsModule, LucideAngularModule],
+  imports: [CommonModule, FormsModule, LucideAngularModule, FocusTrapDirective],
   template: `
-    <div class="fixed inset-0 z-[200] bg-black flex flex-col overflow-hidden">
+    <div class="fixed inset-0 z-[200] bg-black flex flex-col overflow-hidden"
+         role="dialog" aria-modal="true" aria-label="Signaler un contenu"
+         appFocusTrap (escape)="onClose.emit()">
       <div class="p-6 flex items-center justify-between border-b border-white/10 bg-zinc-950">
         <div class="flex items-center gap-4">
           @if (step !== 'selection' && step !== 'success') {

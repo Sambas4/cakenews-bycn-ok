@@ -2,6 +2,7 @@ import { Component, Input, output, inject } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
+import { TranslationService } from '../services/translation.service';
 
 @Component({
   selector: 'app-bottom-nav',
@@ -29,7 +30,7 @@ import { LucideAngularModule } from 'lucide-angular';
             </div>
 
             <span class="text-[9px] font-[1000] uppercase tracking-widest transition-all duration-300" [ngClass]="isActive(item.path) ? 'text-white opacity-100 translate-y-0' : 'text-zinc-600 opacity-0 translate-y-2 absolute bottom-2'">
-              {{item.label}}
+              {{ t()(item.labelKey, item.label) }}
             </span>
 
             <div class="absolute bottom-0 w-8 h-[2px] rounded-full bg-gradient-to-r from-transparent via-[#ff0000] to-transparent transition-opacity duration-300" [ngClass]="isActive(item.path) ? 'opacity-100' : 'opacity-0'"></div>
@@ -45,12 +46,14 @@ export class BottomNavComponent {
 
   private router = inject(Router);
   private location = inject(Location);
+  private translation = inject(TranslationService);
+  protected t = this.translation.t;
 
   navItems = [
-    { id: 'home', label: 'Accueil', icon: 'home', path: '/feed' },
-    { id: 'search', label: 'Explorer', icon: 'search', path: '/search' },
-    { id: 'messages', label: 'Messages', icon: 'message-circle', path: '/messages' },
-    { id: 'profile', label: 'Profil', icon: 'user', path: '/profile' }
+    { id: 'home',     label: 'Accueil',  labelKey: 'NAV_HOME',     icon: 'home',           path: '/feed' },
+    { id: 'search',   label: 'Explorer', labelKey: 'NAV_EXPLORE',  icon: 'search',         path: '/search' },
+    { id: 'messages', label: 'Messages', labelKey: 'NAV_MESSAGES', icon: 'message-circle', path: '/messages' },
+    { id: 'profile',  label: 'Profil',   labelKey: 'NAV_PROFILE',  icon: 'user',           path: '/profile' },
   ];
 
   isActive(path: string): boolean {

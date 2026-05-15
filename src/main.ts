@@ -1,16 +1,97 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import { AppComponent } from './app/app.component';
-import { provideRouter } from '@angular/router';
-import { provideZonelessChangeDetection } from '@angular/core';
-import { LUCIDE_ICONS, LucideIconProvider, Loader, Sparkles, History, MoreHorizontal, MoreVertical, Award, Leaf, X, Zap, Activity, ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Search, Languages, Twitter, Video, PlusSquare, FileEdit, AlignLeft, PenTool, PlaySquare, Calendar, CheckCircle, Megaphone, Ban, Home, MessageCircle, User, Settings, Share2, Heart, Bookmark, AlertTriangle, Shield, ShieldCheck, Eye, EyeOff, Flag, Radio, Monitor, ImageOff, Layers, Globe, BarChart3, SlidersHorizontal, Target, Flame, Lock, Mail, Key, Bell, Star, Info, LogOut, PieChart, Trophy, QrCode, MapPin, Check, Edit2, MessageSquare, CheckCircle2, Send, ArrowRight, Link, Image, FileText, Mic, MicOff, Paperclip, AlertCircle, Database, Save, Clock, Users, Plus, Trash2, Mic2, Play, Pause, Tag, RotateCcw, Download, RefreshCw, Filter, Sliders, ArrowUp, ArrowDown, ShieldAlert, ExternalLink, Cpu, Archive, Edit3, UserPlus, TrendingUp, Hash, BarChart2, List, AtSign } from 'lucide-angular';
+import { provideRouter, withInMemoryScrolling, withRouterConfig } from '@angular/router';
+import { ErrorHandler, provideZonelessChangeDetection } from '@angular/core';
+
+// Tailwind + base styles are compiled locally now (no more cdn.tailwindcss.com)
+// so the production binary can ship under a strict CSP.
+import './styles.css';
+import {
+  LUCIDE_ICONS, LucideIconProvider,
+  Loader, Sparkles, History, MoreHorizontal, MoreVertical, Award, Leaf, X, Zap, Activity,
+  ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Search, Languages, Twitter, Video,
+  PlusSquare, FileEdit, AlignLeft, PenTool, PlaySquare, Calendar, CheckCircle, Megaphone,
+  Ban, Home, MessageCircle, User, Settings, Share2, Heart, Bookmark, AlertTriangle,
+  Shield, ShieldCheck, Eye, EyeOff, Flag, Radio, Monitor, ImageOff, Layers, Globe,
+  BarChart3, SlidersHorizontal, Target, Flame, Lock, Mail, Key, Bell, Star, Info,
+  LogOut, PieChart, Trophy, QrCode, MapPin, Check, Edit2, MessageSquare, CheckCircle2,
+  Send, ArrowRight, Link, Image, FileText, Mic, MicOff, Paperclip, AlertCircle, Database,
+  Save, Clock, Users, Plus, Trash2, Mic2, Play, Pause, Tag, RotateCcw, Download, RefreshCw,
+  Filter, Sliders, ArrowUp, ArrowDown, ShieldAlert, ExternalLink, Cpu, Archive, Edit3,
+  UserPlus, TrendingUp, Hash, BarChart2, List, AtSign, Smile, Camera, Headphones, Compass,
+  Sparkle, MoonStar, Sun, ChevronUp, Bookmark as BookmarkIcon, Wifi, WifiOff
+} from 'lucide-angular';
 
 import { routes } from './app/app.routes';
+import { GlobalErrorHandler } from './app/services/error-handler.service';
+import { ARTICLE_API } from './app/services/api/article-api';
+import { SupabaseArticleApi } from './app/services/api/supabase-article-api';
+
+// Surface the build-time Sentry DSN to the SentryBindingService, which
+// reads it lazily once the user accepts analytics consent. Setting the
+// global before bootstrap keeps the binding service free of build-time
+// env-var coupling — runtime overrides via a deployment config endpoint
+// stay possible.
+declare global { interface Window { __cakeSentryDsn?: string } }
+{
+  const dsn = (import.meta as { env?: Record<string, string> }).env?.['VITE_SENTRY_DSN'];
+  if (typeof dsn === 'string' && dsn.trim().length > 0) {
+    window.__cakeSentryDsn = dsn.trim();
+  }
+}
 
 bootstrapApplication(AppComponent, {
   providers: [
     provideZonelessChangeDetection(),
-    provideRouter(routes),
-    { provide: LUCIDE_ICONS, multi: true, useValue: new LucideIconProvider({ Loader, Sparkles, History, MoreHorizontal, MoreVertical, Award, Leaf, X, Zap, Activity, ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Search, Languages, Twitter, Video, PlusSquare, FileEdit, AlignLeft, PenTool, PlaySquare, Calendar, CheckCircle, Megaphone, Ban, Home, MessageCircle, User, Settings, Share2, Heart, Bookmark, AlertTriangle, Shield, ShieldCheck, Eye, EyeOff, Flag, Radio, Monitor, ImageOff, Layers, Globe, BarChart3, SlidersHorizontal, Target, Flame, Lock, Mail, Key, Bell, Star, Info, LogOut, PieChart, Trophy, QrCode, MapPin, Check, Edit2, MessageSquare, CheckCircle2, Send, ArrowRight, Link, Image, FileText, Mic, MicOff, Paperclip, AlertCircle, Database, Save, Clock, Users, Plus, Trash2, Mic2, Play, Pause, Tag, RotateCcw, Download, RefreshCw, Filter, Sliders, ArrowUp, ArrowDown, ShieldAlert, ExternalLink, Cpu, Archive, Edit3, UserPlus, TrendingUp, Hash, BarChart2, List, AtSign }) }
+    provideRouter(
+      routes,
+      withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),
+      withRouterConfig({ paramsInheritanceStrategy: 'always' })
+    ),
+    { provide: ErrorHandler, useClass: GlobalErrorHandler },
+    // Default IArticleApi implementation. Tests / dev environments can
+    // override this token with InMemoryArticleApi via TestBed.
+    { provide: ARTICLE_API, useExisting: SupabaseArticleApi },
+    {
+      provide: LUCIDE_ICONS,
+      multi: true,
+      useValue: new LucideIconProvider({
+        Loader, Sparkles, History, MoreHorizontal, MoreVertical, Award, Leaf, X, Zap, Activity,
+        ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Search, Languages, Twitter, Video,
+        PlusSquare, FileEdit, AlignLeft, PenTool, PlaySquare, Calendar, CheckCircle, Megaphone,
+        Ban, Home, MessageCircle, User, Settings, Share2, Heart, Bookmark, AlertTriangle,
+        Shield, ShieldCheck, Eye, EyeOff, Flag, Radio, Monitor, ImageOff, Layers, Globe,
+        BarChart3, SlidersHorizontal, Target, Flame, Lock, Mail, Key, Bell, Star, Info,
+        LogOut, PieChart, Trophy, QrCode, MapPin, Check, Edit2, MessageSquare, CheckCircle2,
+        Send, ArrowRight, Link, Image, FileText, Mic, MicOff, Paperclip, AlertCircle, Database,
+        Save, Clock, Users, Plus, Trash2, Mic2, Play, Pause, Tag, RotateCcw, Download, RefreshCw,
+        Filter, Sliders, ArrowUp, ArrowDown, ShieldAlert, ExternalLink, Cpu, Archive, Edit3,
+        UserPlus, TrendingUp, Hash, BarChart2, List, AtSign, Smile, Camera, Headphones, Compass,
+        Sparkle, MoonStar, Sun, ChevronUp, BookmarkIcon, Wifi, WifiOff
+      })
+    }
   ]
 }).catch(err => console.error(err));
 
+// Register service worker (production only) — never block the main bootstrap.
+if ('serviceWorker' in navigator && (import.meta as any)?.env?.MODE === 'production') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(async () => {
+        // First-load offline: ask the SW to precache every JS/CSS asset
+        // mounted on the current document. After this the next cold
+        // start works without network — the user can re-open the app
+        // in the metro and still browse the cached articles.
+        const reg = await navigator.serviceWorker.ready;
+        const target = reg.active ?? navigator.serviceWorker.controller;
+        if (!target) return;
+        const scripts = Array.from(document.querySelectorAll<HTMLScriptElement>('script[src]'))
+          .map(s => s.src);
+        const styles = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))
+          .map(l => l.href);
+        const urls = [...scripts, ...styles].filter(u => u.startsWith(window.location.origin));
+        if (urls.length > 0) target.postMessage({ type: 'PRECACHE_ASSETS', urls });
+      })
+      .catch(() => { /* swallow */ });
+  });
+}

@@ -1,5 +1,11 @@
 
-export type Category = 
+/**
+ * Macro-buckets used for routing, theming and the algorithm's adjacency
+ * graph. Granularity (clubs, teams, brands) lives in {@link Tag} —
+ * categories must stay coarse enough to make sense as algorithmic
+ * neighbourhoods. "Real Madrid" is a tag of "Football", not a peer.
+ */
+export type Category =
   // ACTUALITÉS
   'Politique' | 'International' | 'Société' | 'Économie' | 'Justice' | 'Environnement' |
   // FUTUR & TECH
@@ -9,13 +15,28 @@ export type Category =
   // DIVERTISSEMENT
   'Cinéma' | 'Musique' | 'People' | 'Gaming' | 'Manga' | 'Humour' |
   // SPORT GÉNÉRAL
-  'Football' | 'NBA' | 'F1' | 'MMA' | 'Tennis' | 
-  // CLUBS & ÉQUIPES (Granularité)
-  'Real Madrid' | 'FC Barcelone' | 'PSG' | 'OM' | 'Lakers' | 'Ferrari' |
+  'Football' | 'NBA' | 'F1' | 'MMA' | 'Tennis' |
+  // CLUBS & ÉQUIPES — KEPT TEMPORARILY for backward compatibility while
+  // the migration to {@link Tag} rolls out. New articles MUST set the
+  // parent category (e.g. 'Football') and put the team in `tags`.
+  /** @deprecated use Tag */ 'Real Madrid' |
+  /** @deprecated use Tag */ 'FC Barcelone' |
+  /** @deprecated use Tag */ 'PSG' |
+  /** @deprecated use Tag */ 'OM' |
+  /** @deprecated use Tag */ 'Lakers' |
+  /** @deprecated use Tag */ 'Ferrari' |
   // ZONE ROUGE & EXPLICITE (Sans filtre)
-  'Guerre' | 'Faits Divers' | 'Paranormal' | 'Opinion Choc' | 
-  // ADULTE / NON CENSURÉ
+  'Guerre' | 'Faits Divers' | 'Paranormal' | 'Opinion Choc' |
+  // ADULTE / NON CENSURÉ — gated by user opt-in in the settings.
   'Mature' | 'Nudité' | 'Charme';
+
+/**
+ * Free-form, content-level descriptor. Multiple tags per article. Tags
+ * are searchable, browsable and feed the recommender's "novelty" axis,
+ * but they never partition the database. Use them for teams, brands,
+ * named entities, sub-topics, recurring series, etc.
+ */
+export type Tag = string;
 
 // --- SYSTÈME DE TRADUCTION ---
 export type TranslationKey = string; // ex: 'ACTION_LIKE', 'NAV_HOME'
@@ -71,6 +92,13 @@ export interface Article {
   status?: 'published' | 'scheduled' | 'draft';
   scheduledDate?: string;
   
+  /**
+   * Free-form descriptors (clubs, brands, recurring series). Surface
+   * these in search, filters, and the algorithm's novelty axis. Tags
+   * never replace `category` — they enrich it.
+   */
+  tags?: Tag[];
+
   // Cognitive Metadata for Advanced Feed Engine
   metadata?: {
     tone: 'Analytique' | 'Inspirant' | 'Polémique' | 'Divertissant' | 'Factuel';
@@ -191,6 +219,10 @@ export interface UserProfile {
   email?: string;
   displayName: string;
   photoURL?: string;
+  /** Avatar URL alias used across UI components (mirrors photoURL). */
+  avatarUrl?: string;
+  /** Background colour set during onboarding. */
+  avatarBg?: string;
   bio?: string;
   username?: string;
   joinDate?: string;
@@ -198,13 +230,35 @@ export interface UserProfile {
   updatedAt?: string;
   status?: 'ACTIVE' | 'SUSPENDED' | 'BANNED';
   role?: 'USER' | 'ADMIN' | 'SUPER_ADMIN';
+  /** Convenience flag derived from role for the UI. */
+  isAdmin?: boolean;
   moderationNote?: string;
+
+  // Optional preferences (premium profile)
+  preferences?: {
+    notifications?: {
+      directMessages?: boolean;
+      replies?: boolean;
+      breakingNews?: boolean;
+      digest?: 'never' | 'daily' | 'weekly';
+    };
+    privacy?: {
+      showActivity?: boolean;
+      showLocation?: boolean;
+      allowDirectMessages?: 'everyone' | 'verified' | 'none';
+    };
+    accessibility?: {
+      reduceMotion?: boolean;
+      largerText?: boolean;
+    };
+  };
 }
 
 export interface PublicProfile {
   uid: string;
   displayName: string;
   photoURL?: string;
+  avatarBg?: string;
   bio?: string;
   username?: string;
   updatedAt?: string;

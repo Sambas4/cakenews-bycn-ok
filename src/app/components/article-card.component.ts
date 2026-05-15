@@ -5,6 +5,7 @@ import type { Article } from '../types';
 import { InteractionService } from '../services/interaction.service';
 import { ModalService } from '../services/modal.service';
 import { DataService } from '../services/data.service';
+import { NativeShareService } from '../services/native-share.service';
 import { ArticleCoverComponent } from './article/article-cover.component';
 import { ReadingProgressBarComponent } from './article/reading-progress-bar.component';
 import { DossierModuleComponent } from './modules/dossier.component';
@@ -219,6 +220,7 @@ export class ArticleCardComponent {
   private interaction = inject(InteractionService);
   private modal = inject(ModalService);
   private dataService = inject(DataService);
+  private share = inject(NativeShareService);
 
   activeTab: ArticleTab = 'dossier';
   readProgress = 0;
@@ -288,18 +290,13 @@ export class ArticleCardComponent {
 
   shareArticle() {
     const article = this.liveArticle();
-    if (navigator.share && article) {
-      navigator.share({
-        title: article.title,
-        text: article.summary,
-        url: window.location.href
-      }).catch((err) => {
-        // Ignore abort errors (user cancelled share)
-        if (err.name !== 'AbortError' && !err.message?.includes('Share canceled') && !err.message?.includes('Share cancelled') && !err.message?.includes('aborted')) {
-          console.error('Error sharing:', err);
-        }
-      });
-    }
+    if (!article) return;
+    void this.share.share({
+      title: article.title,
+      text: article.summary,
+      url: window.location.href,
+      dialogTitle: 'CakeNews',
+    });
   }
 
   openReportModal() {

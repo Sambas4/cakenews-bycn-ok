@@ -16,12 +16,17 @@ import { Router } from "@angular/router";
 import { LucideAngularModule } from "lucide-angular";
 import { AdminTab, Article, UserProfile } from "../../types";
 import { TranslationService } from "../../services/translation.service";
+import { Logger } from "../../services/logger.service";
 import { ArticleCardComponent } from "../article-card.component";
 import { AdminDashboardComponent } from "./admin-dashboard.component";
 import { AdminStudioComponent } from "./admin-studio.component";
 import { AdminUsersComponent } from "./admin-users.component";
 import { AdminAuditComponent } from "./admin-audit.component";
+import { AdminCounterBriefsComponent } from "./admin-counter-briefs.component";
+import { AdminHealthHistoryComponent } from "./admin-health-history.component";
+import { AdminStatusBadgeComponent } from "./admin-status-badge.component";
 import { AdminAntenneComponent } from "./admin-antenne.component";
+import { AdminPushComposerComponent } from "./admin-push-composer.component";
 import { AdminLocalisationComponent } from "./admin-localisation.component";
 import { DataService } from "../../services/data.service";
 import { AuthService } from "../../services/auth.service";
@@ -41,6 +46,10 @@ import { RealtimeChannel } from '@supabase/supabase-js';
     AdminAuditComponent,
     AdminAntenneComponent,
     AdminLocalisationComponent,
+    AdminCounterBriefsComponent,
+    AdminHealthHistoryComponent,
+    AdminStatusBadgeComponent,
+    AdminPushComposerComponent,
   ],
   template: `
     <div
@@ -162,51 +171,72 @@ import { RealtimeChannel } from '@supabase/supabase-js';
             }}
           </span>
         </div>
-        <button
-          (click)="handleLogout()"
-          class="text-xs font-black bg-zinc-900 px-3 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-        >
-          {{ t()("ADMIN_LOGOUT") }}
-        </button>
+        <div class="flex items-center gap-2">
+          <app-admin-status-badge></app-admin-status-badge>
+          <button
+            (click)="handleLogout()"
+            class="text-xs font-black bg-zinc-900 px-3 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+          >
+            {{ t()("ADMIN_LOGOUT") }}
+          </button>
+        </div>
       </div>
 
-      <!-- Main Content Area -->
+      <!-- Main Content Area
+           Each tab is wrapped in a defer-on-immediate block so
+           Angular emits a separate chunk per panel. The studio (the
+           heaviest) used to ride along with the dashboard at admin
+           bootstrap time; now an editor lands on Reseau and only
+           pays for the one panel they actually opened. -->
       <div class="flex-1 overflow-hidden relative bg-zinc-950">
         @switch (activeTab()) {
           @case (AdminTab.RESEAU) {
-            <app-admin-dashboard
-              [articles]="articles()"
-              [users]="users()"
-              (editArticle)="handleEditArticle($event)"
-              (deleteArticle)="handleDeleteArticle($event)"
-            ></app-admin-dashboard>
+            @defer (on immediate) {
+              <app-admin-dashboard
+                [articles]="articles()"
+                [users]="users()"
+                (editArticle)="handleEditArticle($event)"
+                (deleteArticle)="handleDeleteArticle($event)"
+              ></app-admin-dashboard>
+            } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.DOSSIERS) {
-            <app-admin-studio
-              (publish)="handlePublish($event)"
-              (preview)="handlePreview($event)"
-            ></app-admin-studio>
+            @defer (on immediate) {
+              <app-admin-studio
+                (publish)="handlePublish($event)"
+                (preview)="handlePreview($event)"
+              ></app-admin-studio>
+            } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.UTILISATEURS) {
-            <app-admin-users
-              (sendNotification)="handleSendNotification($event)"
-            ></app-admin-users>
+            @defer (on immediate) {
+              <app-admin-users
+                (sendNotification)="handleSendNotification($event)"
+              ></app-admin-users>
+            } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.AUDIT) {
-            <app-admin-audit
-              (editArticle)="handleEditArticle($event)"
-            ></app-admin-audit>
+            @defer (on immediate) {
+              <app-admin-health-history></app-admin-health-history>
+              <app-admin-audit
+                (editArticle)="handleEditArticle($event)"
+              ></app-admin-audit>
+              <app-admin-counter-briefs></app-admin-counter-briefs>
+            } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.ANTENNE) {
-            <app-admin-antenne></app-admin-antenne>
+            @defer (on immediate) {
+              <app-admin-antenne [users]="users()" [articles]="articles()"></app-admin-antenne>
+              <app-admin-push-composer></app-admin-push-composer>
+            } @placeholder { <div class="h-full"></div> }
           }
           @case (AdminTab.LOCALISATION) {
-            <app-admin-localisation></app-admin-localisation>
+            @defer (on immediate) {
+              <app-admin-localisation></app-admin-localisation>
+            } @placeholder { <div class="h-full"></div> }
           }
           @default {
-            <div
-              class="flex flex-col items-center justify-center h-full text-zinc-600 bg-zinc-950"
-            >
+            <div class="flex flex-col items-center justify-center h-full text-zinc-600 bg-zinc-950">
               <lucide-icon name="database" class="w-12 h-12 mb-4"></lucide-icon>
               <p class="text-xs font-mono uppercase">Module Offline</p>
             </div>
@@ -247,6 +277,7 @@ export class AdminViewComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private authService = inject(AuthService);
   private supabaseService = inject(SupabaseService);
+  private logger = inject(Logger);
 
   async ngOnInit() {
       try {
@@ -255,7 +286,7 @@ export class AdminViewComponent implements OnInit, OnDestroy {
               this.users.set(data as UserProfile[]);
           }
       } catch (e) {
-          console.warn('Failed initial fetch of users', e);
+          this.logger.warn('admin.users.fetch', e);
       }
 
       this.channelUsers = this.supabaseService.client.channel('public:users')
@@ -336,8 +367,7 @@ export class AdminViewComponent implements OnInit, OnDestroy {
   }
 
   handleSendNotification(event: { target: string; content: string }) {
-    // this.onSendSystemMessage.emit(event);
-    console.log("Send notification", event);
+    this.logger.debug('admin.notification.send', event);
   }
 
   handleEditArticle(articleId: string) {
@@ -345,7 +375,7 @@ export class AdminViewComponent implements OnInit, OnDestroy {
     if (articleToEdit) {
       this.handlePreview(articleToEdit);
     } else {
-      console.warn("Article introuvable ou supprimé.");
+      this.logger.warn('admin.article.notFound', { articleId });
     }
   }
 

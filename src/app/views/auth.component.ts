@@ -1,8 +1,8 @@
-import { Component, effect, inject, signal } from "@angular/core";
+import { Component, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { Router } from "@angular/router";
 import { LucideAngularModule } from "lucide-angular";
 import { AuthService } from "../services/auth.service";
+import { Logger } from "../services/logger.service";
 import {
   FormGroup,
   FormControl,
@@ -20,14 +20,6 @@ type AuthMode = "login" | "signup" | "forgot_password";
     <div
       class="w-full h-full bg-black flex flex-col items-center justify-center p-6 relative"
     >
-      <!-- Temporary skip auth button for demo bypass -->
-      <button
-        (click)="skipAuth()"
-        class="absolute top-8 right-8 text-[10px] font-bold text-zinc-500 uppercase tracking-widest hover:text-white transition-colors"
-      >
-        Skip (Demo)
-      </button>
-
       <div class="w-full max-w-sm text-center flex flex-col items-center gap-6">
         <h1
           class="text-4xl font-[1000] uppercase tracking-tighter text-white mb-2"
@@ -175,8 +167,8 @@ type AuthMode = "login" | "signup" | "forgot_password";
   `,
 })
 export class AuthViewComponent {
-  private router = inject(Router);
   public authService = inject(AuthService);
+  private logger = inject(Logger);
 
   isLoading = signal<boolean>(false);
   errorMessage = signal<string>("");
@@ -241,7 +233,7 @@ export class AuthViewComponent {
         this.setMode("login");
       }
     } catch (e: any) {
-      console.error(e);
+      this.logger.error('auth.submit', e);
       if (e.message) {
         this.errorMessage.set(e.message);
       } else {
@@ -261,14 +253,11 @@ export class AuthViewComponent {
     try {
       await this.authService.loginWithGoogle();
     } catch (e: any) {
-      console.error(e);
+      this.logger.error('auth.googleLogin', e);
       this.errorMessage.set("Erreur de connexion via Google.");
     } finally {
       this.isLoading.set(false);
     }
   }
 
-  skipAuth() {
-    this.router.navigate(["/feed"]);
-  }
 }

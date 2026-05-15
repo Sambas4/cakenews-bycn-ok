@@ -1,27 +1,29 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, inject, signal, computed, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, inject, signal, computed, HostListener, DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { DataService } from '../services/data.service';
 import { InteractionService } from '../services/interaction.service';
 import { TranslationService } from '../services/translation.service';
-import { FeedEngineService } from '../services/feed-engine.service';
+import { FeedModeService } from '../services/feed-mode.service';
+import { ReactiveFeedBufferService } from '../services/reactive-feed-buffer.service';
 import { ArticleCardComponent } from '../components/article-card.component';
-import { Article, Category } from '../types';
-import { THEME_GROUPS, CATEGORY_COLORS } from '../constants';
+import { FeedModeSwitcherComponent } from '../components/feed-mode-switcher.component';
+import { Article } from '../types';
 import { filter } from 'rxjs/operators';
 
 @Component({
   selector: 'app-feed-view',
   standalone: true,
-  imports: [CommonModule, LucideAngularModule, ArticleCardComponent],
+  imports: [CommonModule, LucideAngularModule, ArticleCardComponent, FeedModeSwitcherComponent],
   template: `
+    <app-feed-mode-switcher></app-feed-mode-switcher>
     @if (articles().length === 0) {
-      <div class="w-full h-full bg-black relative z-[200] flex items-center justify-center">
-        <div class="text-white/50 text-center">
-          <lucide-icon name="archive" class="w-16 h-16 mb-4 opacity-50 mx-auto"></lucide-icon>
-          <p class="text-sm font-bold uppercase tracking-widest">Aucun article disponible</p>
-        </div>
+      <div class="w-full h-full bg-black relative z-[200] flex flex-col items-center justify-center px-8 text-center">
+        <lucide-icon name="archive" class="w-12 h-12 mb-4 text-white/30"></lucide-icon>
+        <p class="text-[12px] font-black uppercase tracking-[0.2em] text-white/50">{{ emptyTitle() }}</p>
+        <p class="text-[11.5px] text-white/40 mt-2 max-w-[280px] leading-snug">{{ emptyHint() }}</p>
       </div>
     } @else {
       <div 
@@ -63,19 +65,34 @@ export class FeedViewComponent implements OnInit, OnDestroy {
   private dataService = inject(DataService);
   private interaction = inject(InteractionService);
   private translation = inject(TranslationService);
-  private feedEngine = inject(FeedEngineService);
+  private feedMode = inject(FeedModeService);
+  private buffer = inject(ReactiveFeedBufferService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
   t = this.translation.t;
   Math = Math;
 
-  // L'état du feed (isolé de la réactivité continue brute pour ne pas recréer le DOM à chaque micro-signal)
-  feedArticles = computed(() => {
-    // This allows the feed to automatically reflect new likes/comments from snapshot 
-    // while keeping the order stable based on FeedEngine rules.
-    const allArticles = this.dataService.articles();
-    return this.feedEngine.generateAdaptiveFeed(allArticles);
+  // CakeEngine v3 — the feed pulls from a 5-slot reactive buffer that
+  // re-ranks live as the user advances. Pivots fired by the
+  // CircuitBreaker swap the unrendered tail without touching the card
+  // currently on screen.
+  feedArticles = this.buffer.visible;
+
+  emptyTitle = computed(() => {
+    switch (this.feedMode.mode()) {
+      case 'cercle': return 'Ton Cercle est vide';
+      case 'radar':  return 'Aucun breaking en direct';
+      default:       return 'Aucun article disponible';
+    }
+  });
+
+  emptyHint = computed(() => {
+    switch (this.feedMode.mode()) {
+      case 'cercle': return 'Like, commente ou sauve un article pour qu\'il rejoigne ton Cercle.';
+      case 'radar':  return 'Quand l\'actualité bouge, le Radar la pousse ici en temps réel.';
+      default:       return 'Reviens dans un instant, l\'antenne s\'allume.';
+    }
   });
   
   articles = this.feedArticles;
@@ -97,25 +114,33 @@ export class FeedViewComponent implements OnInit, OnDestroy {
     isLockedHorizontal: false,
   };
 
-  private routerSub: any;
   private viewStartTime: number = Date.now();
+  private destroyRef = inject(DestroyRef);
 
   ngOnInit() {
-    this.route.paramMap.subscribe(params => {
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       const id = params.get('id');
-      if (id && this.articles().length > 0) {
-        const index = this.articles().findIndex((a: Article) => a.id === id);
-        if (index >= 0 && index !== this.currentIndex) {
-          this.currentIndex = index;
-        }
-      } else {
+      if (!id) {
         this.currentIndex = 0;
+        return;
       }
+      // Try to align the cursor on an article already in the buffer.
+      const index = this.articles().findIndex((a: Article) => a.id === id);
+      if (index >= 0) {
+        this.currentIndex = index;
+        return;
+      }
+      // Otherwise: pin the article on the buffer head so the deep link
+      // actually opens the requested article instead of whatever the
+      // ranker had on top.
+      this.buffer.pinArticle(id);
+      this.currentIndex = 0;
     });
 
-    this.routerSub = this.router.events.pipe(
-      filter(event => event instanceof NavigationEnd)
-    ).subscribe((event: any) => {
+    this.router.events.pipe(
+      filter(event => event instanceof NavigationEnd),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe((event: NavigationEnd) => {
       if (event.url === '/feed' || event.urlAfterRedirects === '/feed') {
         this.currentIndex = 0;
         if (this.trackRef) {
@@ -133,11 +158,51 @@ export class FeedViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  ngOnDestroy() {
-    this.logCurrentDwellTime(); // Enregistrer le temps passé sur l'article en cours à la fermeture
-    if (this.routerSub) {
-      this.routerSub.unsubscribe();
+  // ────────────────────────────────────────────────────────────────
+  // Keyboard navigation — required for WCAG 2.1 A. Swipe gestures
+  // are the primary input on mobile but the feed must remain usable
+  // for assistive tech and external keyboards.
+  // ────────────────────────────────────────────────────────────────
+  @HostListener('window:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent) {
+    // Ignore key events while typing in inputs / textareas / contenteditable.
+    const tag = (event.target as HTMLElement | null)?.tagName ?? '';
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+    if ((event.target as HTMLElement | null)?.isContentEditable) return;
+
+    switch (event.key) {
+      case 'ArrowDown':
+      case 'ArrowRight':
+      case 'PageDown':
+      case ' ': // Space advances; matches TikTok / YouTube Shorts.
+      case 'j':
+        event.preventDefault();
+        this.handleNavigateNext();
+        break;
+      case 'ArrowUp':
+      case 'ArrowLeft':
+      case 'PageUp':
+      case 'k':
+        event.preventDefault();
+        this.handleNavigatePrev();
+        break;
+      default:
+        return;
     }
+  }
+
+  handleNavigatePrev() {
+    if (this.currentIndex <= 0) return;
+    this.logCurrentDwellTime();
+    this.currentIndex -= 1;
+    this.viewStartTime = Date.now();
+    this.updateRoute();
+  }
+
+  ngOnDestroy() {
+    // Log dwell time for the last article when the user navigates away.
+    // RxJS subscriptions clean themselves up via takeUntilDestroyed.
+    this.logCurrentDwellTime();
   }
 
   // --- LOGIC DE CHRONOMÈTRAGE (MICRO SIGNAUX) ---
@@ -240,9 +305,17 @@ export class FeedViewComponent implements OnInit, OnDestroy {
     }
 
     if (newIndex !== this.currentIndex) {
-        this.logCurrentDwellTime(); // L'utilisateur vient de swiper : on enregistre combien de temps il est resté
+        // 1. Capture the dwell on the article we are leaving — this is
+        //    what feeds the CircuitBreaker. Must happen *before* the
+        //    buffer slides, otherwise the timing would attach to the
+        //    next slot.
+        this.logCurrentDwellTime();
+        // 2. Slide the reactive buffer forward. If the buffer was
+        //    running thin or the breaker fired during the dwell log,
+        //    the upcoming queue is now refreshed transparently.
+        if (newIndex > this.currentIndex) this.buffer.advance();
         this.currentIndex = newIndex;
-        this.viewStartTime = Date.now(); // Reset du chrono pour le nouvel article
+        this.viewStartTime = Date.now();
         this.updateRoute();
     }
 

@@ -1,6 +1,47 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { Category, UserLocation, UserStats } from '../types';
 import { DataService } from './data.service';
+import { PrivacyService } from './privacy.service';
+import { ReadTimeEstimatorService } from './read-time-estimator.service';
+import { Logger } from './logger.service';
+
+/**
+ * localStorage may be unavailable (private browsing, disabled by the
+ * user, quota exceeded). Wrap every access so a single failure doesn't
+ * cascade into a runtime error that breaks the feed.
+ */
+function safeRead<T>(key: string, fallback: T, logger: Logger): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw) as T;
+  } catch (err) {
+    logger.warn('interaction.localStorage.read', { key, err });
+    return fallback;
+  }
+}
+
+function safeWrite(key: string, value: unknown, logger: Logger): void {
+  try {
+    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+  } catch (err) {
+    logger.warn('interaction.localStorage.write', { key, err });
+  }
+}
+
+/**
+ * Discrete reaction intensity for a forward navigation. Mapping:
+ *  - `flick`  : the user dismissed the card before they could have
+ *               read anything (≤ 800ms). Treat as violent rejection.
+ *  - `fast`   : skimmed the headline/cover (≤ 2 000ms). Mild rejection.
+ *  - `normal` : engaged but moved on. Neutral signal.
+ *  - `deep`   : substantial dwell relative to expected time.
+ *               Strong endorsement.
+ */
+export type SignalIntensity = 'flick' | 'fast' | 'normal' | 'deep';
+
+const FLICK_MAX_MS = 800;
+const FAST_MAX_MS = 2_000;
 
 @Injectable({
   providedIn: 'root'
@@ -14,6 +55,13 @@ export class InteractionService {
   hasCompletedOnboarding = signal<boolean>(false);
   votedVibes = signal<Record<string, string[]>>({});
 
+  /**
+   * Intensity bucket for a forward navigation. The algorithm reacts
+   * differently to each — a `flick` is a violent rejection that should
+   * push us to flush our buffer, while a `deep` is a strong endorsement.
+   */
+  // signal-intensity moved to a typed enum for clarity at call-sites.
+
   sessionHistory = signal<{
     articleId: string;
     category: string;
@@ -21,10 +69,15 @@ export class InteractionService {
     durationMs: number;
     expectedDurationMs?: number;
     completionRatio?: number;
+    /** Discrete intensity bucket — see {@link SignalIntensity}. */
+    intensity?: SignalIntensity;
     timestamp: number;
   }[]>([]);
 
   private dataService = inject(DataService);
+  private privacy = inject(PrivacyService);
+  private readEstimator = inject(ReadTimeEstimatorService);
+  private logger = inject(Logger);
 
   userLocation = signal<UserLocation>({
     neighborhood: '',
@@ -42,57 +95,38 @@ export class InteractionService {
   });
 
   constructor() {
-    const savedLikes = localStorage.getItem('cake_likes');
-    if (savedLikes) this.likedArticles.set(JSON.parse(savedLikes));
-
-    const savedSaves = localStorage.getItem('cake_saves');
-    if (savedSaves) this.savedArticles.set(JSON.parse(savedSaves));
-
-    const savedReads = localStorage.getItem('cake_reads');
-    if (savedReads) this.readArticles.set(JSON.parse(savedReads));
-
-    const savedComments = localStorage.getItem('cake_comments');
-    if (savedComments) this.commentedArticles.set(JSON.parse(savedComments));
-
-    const savedInterests = localStorage.getItem('cake_interests');
-    if (savedInterests) this.userInterests.set(JSON.parse(savedInterests));
-
-    const savedOnboarding = localStorage.getItem('cake_onboarding');
-    if (savedOnboarding) this.hasCompletedOnboarding.set(JSON.parse(savedOnboarding));
-    
-    const savedVibes = localStorage.getItem('cake_vibes');
-    if (savedVibes) this.votedVibes.set(JSON.parse(savedVibes));
-
-    const savedLocation = localStorage.getItem('cake_location');
-    if (savedLocation) this.userLocation.set(JSON.parse(savedLocation));
-
-    const savedStats = localStorage.getItem('cake_stats');
-    if (savedStats) this.userStats.set(JSON.parse(savedStats));
+    this.likedArticles.set(safeRead<string[]>('cake_likes', [], this.logger));
+    this.savedArticles.set(safeRead<string[]>('cake_saves', [], this.logger));
+    this.readArticles.set(safeRead<string[]>('cake_reads', [], this.logger));
+    this.commentedArticles.set(safeRead<string[]>('cake_comments', [], this.logger));
+    this.userInterests.set(safeRead<Category[]>('cake_interests', [], this.logger));
+    this.hasCompletedOnboarding.set(safeRead<boolean>('cake_onboarding', false, this.logger));
+    this.votedVibes.set(safeRead<Record<string, string[]>>('cake_vibes', {}, this.logger));
+    this.userLocation.set(safeRead<UserLocation>('cake_location', this.userLocation(), this.logger));
+    this.userStats.set(safeRead<UserStats>('cake_stats', this.userStats(), this.logger));
   }
 
   toggleLike(articleId: string) {
     this.likedArticles.update(likes => {
-      const isLiking = !likes.includes(articleId);
+      const wasLiked = likes.includes(articleId);
+      const isLiking = !wasLiked;
       const newLikes = isLiking
         ? [...likes, articleId]
         : likes.filter(id => id !== articleId);
-        
-      localStorage.setItem('cake_likes', JSON.stringify(newLikes));
-      
-      // Tell dataService to increment/decrement in DB directly!
-      if (isLiking) {
-        this.dataService.likeArticle(articleId);
-      } else {
-        // Technically not implemented yet in DataService (decrement), but for now we skip decrement or implement later
-      }
 
-      // Update user stats
+      safeWrite('cake_likes', newLikes, this.logger);
+
+      // Honour both directions: +1 on like, -1 on unlike. The DB layer
+      // floors at 0 so a stale unlike can never push the public total
+      // negative.
+      this.dataService.adjustLikes(articleId, isLiking ? 1 : -1);
+
       this.userStats.update(stats => {
         const newStats = {
           ...stats,
-          likesGiven: stats.likesGiven + (isLiking ? 1 : -1)
+          likesGiven: Math.max(0, stats.likesGiven + (isLiking ? 1 : -1)),
         };
-        localStorage.setItem('cake_stats', JSON.stringify(newStats));
+        safeWrite('cake_stats', newStats, this.logger);
         return newStats;
       });
 
@@ -109,7 +143,7 @@ export class InteractionService {
       const newSaves = saves.includes(articleId)
         ? saves.filter(id => id !== articleId)
         : [...saves, articleId];
-      localStorage.setItem('cake_saves', JSON.stringify(newSaves));
+      safeWrite('cake_saves', newSaves, this.logger);
       return newSaves;
     });
   }
@@ -129,7 +163,7 @@ export class InteractionService {
       const newArticleVibes = isAdding ? [vibe] : [];
       
       const newVibes = { ...vibes, [articleId]: newArticleVibes };
-      localStorage.setItem('cake_vibes', JSON.stringify(newVibes));
+      safeWrite('cake_vibes', newVibes, this.logger);
 
       // Update article stats
       const articles = this.dataService.articles();
@@ -165,7 +199,7 @@ export class InteractionService {
     this.readArticles.update(reads => {
       if (reads.includes(articleId)) return reads;
       const newReads = [...reads, articleId];
-      localStorage.setItem('cake_reads', JSON.stringify(newReads));
+      safeWrite('cake_reads', newReads, this.logger);
       return newReads;
     });
   }
@@ -175,7 +209,7 @@ export class InteractionService {
       const newInterests = interests.includes(category)
         ? interests.filter(c => c !== category)
         : [...interests, category];
-      localStorage.setItem('cake_interests', JSON.stringify(newInterests));
+      safeWrite('cake_interests', newInterests, this.logger);
       return newInterests;
     });
   }
@@ -183,52 +217,67 @@ export class InteractionService {
   updateUserLocation(location: Partial<UserLocation>) {
     this.userLocation.update(current => {
       const newLocation = { ...current, ...location, isSet: true };
-      localStorage.setItem('cake_location', JSON.stringify(newLocation));
+      safeWrite('cake_location', newLocation, this.logger);
       return newLocation;
     });
   }
 
   logSessionRead(articleId: string, durationMs: number) {
+    // Private mode: no session signal ever leaves the page.
+    if (this.privacy.enabled()) return;
+
     const article = this.dataService.articles().find(a => a.id === articleId);
     if (!article) return;
 
-    // L'attention réelle se base sur la complétion, pas le temps absolu
-    const wordCount = article.content ? article.content.split(/\s+/).length : 50;
-    const expectedDurationMs = Math.max(wordCount * 330, 3000); // ~3 mots/sec, min 3s
-    const completionRatio = durationMs / expectedDurationMs;
+    const est = this.readEstimator.estimate(article);
+    const completionRatio = est.expectedMs > 0 ? durationMs / est.expectedMs : 0;
+    const intensity = this.classifyIntensity(durationMs, completionRatio);
 
-    this.sessionHistory.update(history => {
-       const newEvent = {
-         articleId,
-         category: article.category,
-         author: article.author,
-         durationMs,
-         expectedDurationMs,
-         completionRatio,
-         timestamp: Date.now()
-       };
-       return [...history, newEvent];
-    });
+    this.sessionHistory.update(history => [
+      ...history,
+      {
+        articleId,
+        category: article.category,
+        author: article.author,
+        durationMs,
+        expectedDurationMs: est.expectedMs,
+        completionRatio,
+        intensity,
+        timestamp: Date.now(),
+      },
+    ]);
+  }
+
+  /**
+   * Maps a raw dwell time into the intensity bucket downstream services
+   * (CircuitBreaker, ReactiveFeedBuffer) consume to decide how violently
+   * to re-strategise.
+   */
+  private classifyIntensity(durationMs: number, completionRatio: number): SignalIntensity {
+    if (durationMs <= FLICK_MAX_MS) return 'flick';
+    if (durationMs <= FAST_MAX_MS) return 'fast';
+    if (completionRatio >= 0.7) return 'deep';
+    return 'normal';
   }
 
   logComment(articleId: string) {
     this.commentedArticles.update(comments => {
       if (comments.includes(articleId)) return comments;
       const newComments = [...comments, articleId];
-      localStorage.setItem('cake_comments', JSON.stringify(newComments));
+      safeWrite('cake_comments', newComments, this.logger);
       return newComments;
     });
     
     // Increment external user stats as well
     this.userStats.update(stats => {
       const newStats = { ...stats, commentsPosted: stats.commentsPosted + 1 };
-      localStorage.setItem('cake_stats', JSON.stringify(newStats));
+      safeWrite('cake_stats', newStats, this.logger);
       return newStats;
     });
   }
 
   completeOnboarding() {
     this.hasCompletedOnboarding.set(true);
-    localStorage.setItem('cake_onboarding', 'true');
+    safeWrite('cake_onboarding', 'true', this.logger);
   }
 }

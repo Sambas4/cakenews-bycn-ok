@@ -7,6 +7,7 @@ import { AuthService } from "../../services/auth.service";
 import { UserService } from "../../services/user.service";
 import { Router } from "@angular/router";
 import { SupabaseService } from "../../services/supabase.service";
+import { Logger } from "../../services/logger.service";
 
 @Component({
   selector: "app-admin-users",
@@ -167,6 +168,7 @@ export class AdminUsersComponent implements OnInit {
   private userService = inject(UserService);
   private router = inject(Router);
   private supabaseService = inject(SupabaseService);
+  private logger = inject(Logger);
 
   sendNotification = output<{ target: string; content: string }>();
 
@@ -218,7 +220,7 @@ export class AdminUsersComponent implements OnInit {
       if (error) throw error;
       this.users.set((data as UserProfile[]) || []);
     } catch(e) {
-      console.error("Erreur de chargement des utilisateurs", e);
+      this.logger.error('admin.users.load', e);
     } finally {
       this.isLoading.set(false);
     }
@@ -274,7 +276,7 @@ export class AdminUsersComponent implements OnInit {
           }
           alert(`Le rôle de l'utilisateur a été mis à jour: ${newRole}`);
       } catch (e) {
-          console.error(e);
+          this.logger.error('admin.users.updateRole', e);
           alert("Erreur lors de la mise à jour du rôle.");
       }
   }
@@ -282,14 +284,13 @@ export class AdminUsersComponent implements OnInit {
   async handleBanToggle(targetUser: UserProfile) {
      const currentUserIsSuperAdmin = this.authService.isSuperAdmin();
      const currentActiveUser = this.authService.currentUser();
-     const currentUserIsDev = currentActiveUser?.email === 'mademagic3d@gmail.com';
-     const targetIsSuperAdmin = targetUser.email === 'mademagic3d@gmail.com' || targetUser.role === 'SUPER_ADMIN';
-     
-     // Anti-mutiny system: If a normal admin tries to ban super admin
-     if (targetIsSuperAdmin && !currentUserIsSuperAdmin && !currentUserIsDev) {
-         alert("🚫 TENTATIVE DE MUTINERIE DÉTECTÉE. Révocation immédiate de vos accès administratifs. Vous êtes banni.");
+     const targetIsSuperAdmin = targetUser.role === 'SUPER_ADMIN';
+
+     // Anti-mutiny: a non-super-admin cannot ban a super-admin. The
+     // DB role is the only source of truth — no email-based exception.
+     if (targetIsSuperAdmin && !currentUserIsSuperAdmin) {
+         alert("Action interdite : seul un SUPER_ADMIN peut bannir un autre SUPER_ADMIN.");
          if (currentActiveUser) {
-             // Ban the mutator
              await this.userService.updateUserProfile(currentActiveUser.id, { status: 'BANNED' });
          }
          await this.authService.logout();
@@ -317,7 +318,7 @@ export class AdminUsersComponent implements OnInit {
             this.detailedUser.update(u => u ? {...u, status: newStatus} : u);
          }
      } catch (e) {
-         console.error(e);
+         this.logger.error('admin.users.banToggle', e);
          alert("Le changement de statut a échoué.");
      }
   }
