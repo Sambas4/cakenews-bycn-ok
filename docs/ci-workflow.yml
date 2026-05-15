@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: lint · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Type-check
+        run: npm run lint
+
+      # ESLint warning budget is enforced — every fix shrinks the
+      # ceiling. Raising it requires an explicit reviewer decision.
+      - name: ESLint
+        run: npm run lint:eslint -- --max-warnings 200
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: npm run build
+
+      - name: Bundle report
+        if: always()
+        run: |
+          {
+            echo "## Bundle sizes"
+            echo
+            ls -lh dist/assets/*.js 2>/dev/null | awk '{print "- " $5 " — " $NF}' | sort
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    name: playwright smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E smoke tests
+        run: npm run e2e
+        env:
+          CI: 'true'
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

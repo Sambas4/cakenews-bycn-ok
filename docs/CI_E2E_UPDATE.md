@@ -1,122 +1,31 @@
-# CI workflow — adding the Playwright job
+# Installation du workflow CI
 
-Same constraint as the original CI install: the dev-loop PAT does
-not have GitHub's `workflow` scope, so this YAML cannot be pushed
-through the normal commit pipeline. Update the file directly via
-the GitHub UI or a maintainer push from a workflow-scoped session.
+> **Contrainte connue** — le PAT utilisé par le pipeline de
+> développement automatique n'a pas le scope GitHub `workflow`. Les
+> fichiers sous `.github/workflows/` doivent donc être créés via
+> l'interface GitHub, par un mainteneur qui dispose d'une session
+> `workflow`-scoped, ou via un push manuel depuis un autre token.
 
-## Action
+## Procédure
 
-Replace the existing `.github/workflows/ci.yml` with the content
-below. The diff vs. the original install:
+1. Ouvrir `docs/ci-workflow.yml` dans le dépôt.
+2. Copier intégralement son contenu.
+3. Sur GitHub : `Actions → set up a workflow yourself`.
+4. Renommer le fichier `ci.yml`, coller le contenu, commit `chore(ci):
+   install lint+test+e2e workflow` sur `main`.
+5. Optionnel : vérifier que le job tourne en ouvrant une PR triviale.
 
-- A second job `e2e` runs after the unit job, only on the main
-  pipeline (PRs and `main` pushes). Failures don't block the unit
-  job — both gate the merge independently so reviewers see exactly
-  which layer broke.
-- The Playwright browser binaries are cached so subsequent runs
-  cost a single `npm ci` step.
-- Cancellation concurrency stays scoped to the ref, so a rapid
-  push only kills its own run.
+## Une fois installé
 
-## YAML
+Supprimer ce fichier ET `docs/ci-workflow.yml`. La source de vérité
+devient `.github/workflows/ci.yml`.
 
-```yaml
-name: CI
+## Contenu attendu (résumé)
 
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-
-jobs:
-  unit:
-    name: lint · test · build
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Install
-        run: npm ci --prefer-offline --no-audit --no-fund
-
-      - name: Type-check
-        run: npm run lint
-
-      - name: ESLint
-        run: npm run lint:eslint -- --max-warnings 250
-
-      - name: Unit tests
-        run: npm test
-
-      - name: Production build
-        run: npm run build
-
-      - name: Bundle report
-        if: always()
-        run: |
-          {
-            echo "## Bundle sizes"
-            echo
-            ls -lh dist/assets/*.js 2>/dev/null | awk '{print "- " $5 " — " $NF}' | sort
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  e2e:
-    name: playwright smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: unit
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Install
-        run: npm ci --prefer-offline --no-audit --no-fund
-
-      # Cache the Playwright browser binaries so re-runs are cheap.
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-      - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Run E2E smoke tests
-        run: npm run e2e
-        env:
-          CI: 'true'
-
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-```
-
-## Once installed
-
-Delete this doc. The CI definition will be the single source of
-truth in `.github/workflows/ci.yml`.
+* **Job `unit`** : `npm ci`, `tsc --noEmit`, `eslint --max-warnings 200`,
+  `vitest run`, `vite build` avec `RELEASE_SHA=${{ github.sha }}` pour
+  taguer le bundle Sentry.
+* **Job `e2e`** : `playwright install chromium` (caché), `npm run e2e`.
+  Le rapport est uploadé en artifact si la suite échoue.
+* Concurrence par `github.ref` — un push rapide annule sa propre run
+  précédente.

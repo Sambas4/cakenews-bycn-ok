@@ -1,6 +1,19 @@
 import path from 'path';
 import { defineConfig } from 'vite';
 import angular from '@analogjs/vite-plugin-angular';
+import { execSync } from 'child_process';
+
+function resolveRelease(): string {
+  const explicit = process.env['RELEASE_SHA'] ?? process.env['VERCEL_GIT_COMMIT_SHA'];
+  if (explicit) return explicit.slice(0, 12);
+  try {
+    return execSync('git rev-parse --short=12 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim();
+  } catch {
+    return 'dev';
+  }
+}
 
 /**
  * Vite configuration for CakeNews.
@@ -17,6 +30,9 @@ export default defineConfig(() => ({
   server: {
     port: 3000,
     host: '0.0.0.0',
+  },
+  define: {
+    __CAKE_RELEASE__: JSON.stringify(resolveRelease()),
   },
   plugins: [angular()],
   resolve: {

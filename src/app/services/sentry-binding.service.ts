@@ -61,6 +61,9 @@ export class SentryBindingService {
       sentry.init({
         dsn: effectiveDsn,
         environment: (import.meta as { env?: { MODE?: string } }).env?.MODE ?? 'production',
+        // Tag every event with the build's git SHA so the Sentry UI
+        // groups regressions by deploy without needing a release upload.
+        release: (globalThis as { __CAKE_RELEASE__?: string }).__CAKE_RELEASE__ ?? 'dev',
         tracesSampleRate: 0,
       });
 
