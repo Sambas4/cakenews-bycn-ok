@@ -6,6 +6,12 @@ verifies the user journey end-to-end against a real browser engine.
 
 ## What's covered today
 
+| Fichier                              | Couverture                                       |
+|--------------------------------------|--------------------------------------------------|
+| `tests/e2e/smoke.spec.ts`            | Shell, légal, profil public, cookie banner       |
+| `tests/e2e/a11y.spec.ts`             | Labels accessibles, tab order, offline pill, reduced-motion |
+| `tests/e2e/feed-keyboard.spec.ts`    | Pas d'erreurs console sur les raccourcis clavier |
+
 `tests/e2e/smoke.spec.ts` — minimum-viable suite that runs on every
 PR through GitHub Actions:
 
@@ -17,6 +23,17 @@ PR through GitHub Actions:
 - A non-existent public profile shows the "introuvable" empty state.
 - The cookie banner appears on first visit and persists the user's
   choice across reloads.
+
+`tests/e2e/a11y.spec.ts` — structural guarantees we never want to
+regress: every interactive button has an accessible name, the first
+Tab lands on a real control, the offline pill appears when
+`navigator.onLine` flips, and `prefers-reduced-motion: reduce` toggles
+the `cake-reduce-motion` class on `<html>`.
+
+`tests/e2e/feed-keyboard.spec.ts` — fires Arrow / Space keys against
+the feed shell and asserts no JS console error escapes the
+`@HostListener` handler. Skipped on Webkit headless where the
+key dispatch is intermittent.
 
 ## What's intentionally *not* covered
 
