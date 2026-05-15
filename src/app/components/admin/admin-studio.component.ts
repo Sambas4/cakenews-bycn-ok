@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import { TranslationService } from '../../services/translation.service';
 import { BroadcastService } from '../../services/broadcast.service';
+import { Logger } from '../../services/logger.service';
 import { Article, Category, ExternalVoice, BroadcastCampaign } from '../../types';
 import { CATEGORIES } from '../../constants';
 
@@ -387,6 +388,7 @@ type StudioSubTab = 'EDITEUR' | 'PROGRAMME' | 'BROUILLONS' | 'ARCHIVES';
 export class AdminStudioComponent {
   translationService = inject(TranslationService);
   broadcastService = inject(BroadcastService);
+  private logger = inject(Logger);
 
   publish = output<Article>();
   preview = output<Article>();
@@ -599,7 +601,7 @@ export class AdminStudioComponent {
       this.targetingInterests.set([]);
 
     } catch (e) {
-      console.error("Erreur publication studio", e);
+      this.logger.error('admin.studio.publish', e);
     } finally {
       this.isSubmitting.set(false);
     }

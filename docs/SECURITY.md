@@ -58,6 +58,33 @@ an admin session is the realistic threat we're guarding against.
 Denied requests return `429 Too Many Requests` with a `Retry-After`
 header (seconds) so the client can back off without polling.
 
+## Input validation & content length caps
+
+Migration `0008_content_constraints.sql` adds defence-in-depth on every
+user-provided text column. RLS already restricts WHO can write; these
+constraints restrict WHAT they can write.
+
+| Table              | Column     | Cap (chars) |
+|--------------------|------------|-------------|
+| `articles`         | `title`    | 200         |
+| `articles`         | `subtitle` | 400         |
+| `articles`         | `content`  | 32 768      |
+| `article_comments` | `content`  | 1–2 000     |
+
+The `post_article_comment` RPC trims whitespace server-side, so
+whitespace-only payloads cannot bypass the `>= 1` lower bound. The
+Edge Function `send-push` enforces APNs-friendly caps before
+dispatching:
+
+| Field   | Cap       |
+|---------|-----------|
+| `title` | 1–100     |
+| `body`  | ≤ 200     |
+| `url`   | ≤ 500     |
+| `tag`   | ≤ 64      |
+
+Denied requests return `400` with an explicit `error` code.
+
 ## Content Security Policy
 
 The SPA ships with a strict CSP (see `index.html` / `vercel.json`). Key
@@ -104,6 +131,14 @@ Configured in `vercel.json`:
 | `GEMINI_API_KEY`             | 90 days      | Editorial   |
 
 Document each rotation in the engineering log with timestamp and operator.
+
+## Audit-log retention
+
+`public.admin_audit_log` is append-only and grows monotonically with
+traffic. Migration `0008` schedules `public.audit_log_gc()` to delete
+rows older than 13 months on the 1st of each month at 03:23 UTC
+(`pg_cron`). The 13-month window leaves a year of incident archaeology
+plus a one-month buffer for late investigations.
 
 ## Incident response
 

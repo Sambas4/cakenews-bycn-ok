@@ -134,6 +134,25 @@ Deno.serve(async (req) => {
     return json(400, { error: 'missing_audience_or_payload' }, cors);
   }
 
+  // Per-channel hard caps. APNs rejects payloads > 4 KiB silently and
+  // FCM tucks anything over its limit into `data` — both make for a
+  // miserable debugging session. Cap title/body before they ever reach
+  // the dispatcher.
+  const title = (body.payload.title ?? '').trim();
+  const pushBody = (body.payload.body ?? '').trim();
+  const url = (body.payload.url ?? '').trim();
+  const tag = (body.payload.tag ?? '').trim();
+  if (title.length === 0 || title.length > 100) {
+    return json(400, { error: 'invalid_title', detail: 'title must be 1-100 chars' }, cors);
+  }
+  if (pushBody.length > 200) {
+    return json(400, { error: 'invalid_body', detail: 'body must be <= 200 chars' }, cors);
+  }
+  if (url.length > 500 || tag.length > 64) {
+    return json(400, { error: 'invalid_metadata', detail: 'url <= 500, tag <= 64' }, cors);
+  }
+  body.payload = { title, body: pushBody, url: url || undefined, tag: tag || undefined, tone: body.payload.tone };
+
   const subscriptions = await resolveAudience(admin, body.audience);
 
   const stats = { web: 0, ios: 0, android: 0, pruned: 0, failed: 0 };

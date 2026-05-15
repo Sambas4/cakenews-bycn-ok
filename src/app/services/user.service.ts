@@ -2,6 +2,7 @@ import { Injectable, signal, inject } from '@angular/core';
 import { SupabaseService } from './supabase.service';
 import { UserProfile, PublicProfile } from '../types';
 import { AuditLogService } from './audit-log.service';
+import { Logger } from './logger.service';
 
 @Injectable({
   providedIn: 'root'
@@ -9,6 +10,7 @@ import { AuditLogService } from './audit-log.service';
 export class UserService {
   private supabaseService = inject(SupabaseService);
   private audit = inject(AuditLogService);
+  private logger = inject(Logger);
 
   currentUserProfile = signal<UserProfile | null>(null);
   currentPublicProfile = signal<PublicProfile | null>(null);
@@ -28,7 +30,7 @@ export class UserService {
       }
       return data as UserProfile;
     } catch (e: any) {
-      console.error('Error fetching user profile:', e);
+      this.logger.error('user.fetchProfile', e);
       return null;
     }
   }
@@ -47,7 +49,7 @@ export class UserService {
       }
       return data as PublicProfile;
     } catch (e: any) {
-      console.error('Error fetching public profile:', e);
+      this.logger.error('user.fetchPublicProfile', e);
       return null;
     }
   }
@@ -64,7 +66,11 @@ export class UserService {
       username: username || displayName.replace(/\s+/g, '').toLowerCase(),
       bio: '',
       joinDate: joinDateStr,
-      role: email === 'mademagic3d@gmail.com' ? 'SUPER_ADMIN' : 'USER',
+      // Always seed new accounts as USER. Privileged roles are granted
+      // out-of-band (via the BOOTSTRAP_SUPER_ADMIN_UIDS bootstrap path,
+      // or by an existing admin through the admin console). Hard-coding
+      // email-based escalation here would be a backdoor.
+      role: 'USER',
       status: 'ACTIVE',
       createdAt: timestamp,
       updatedAt: timestamp
@@ -87,7 +93,7 @@ export class UserService {
       this.currentUserProfile.set(privateProfile as unknown as UserProfile);
       this.currentPublicProfile.set(publicProfile as unknown as PublicProfile);
     } catch(e: any) {
-       console.error('Error creating profile:', e);
+       this.logger.error('user.createProfile', e);
     }
   }
 
@@ -138,7 +144,7 @@ export class UserService {
         });
       }
     } catch (e) {
-      console.error('Error updating user profile:', e);
+      this.logger.error('user.updateProfile', e);
     }
   }
 
@@ -153,7 +159,7 @@ export class UserService {
         this.currentPublicProfile.set(null);
       }
     } catch (e: any) {
-      console.error('Error deleting user:', e);
+      this.logger.error('user.delete', e);
       throw e;
     }
   }

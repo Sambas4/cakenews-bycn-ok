@@ -16,6 +16,7 @@ import { Router } from "@angular/router";
 import { LucideAngularModule } from "lucide-angular";
 import { AdminTab, Article, UserProfile } from "../../types";
 import { TranslationService } from "../../services/translation.service";
+import { Logger } from "../../services/logger.service";
 import { ArticleCardComponent } from "../article-card.component";
 import { AdminDashboardComponent } from "./admin-dashboard.component";
 import { AdminStudioComponent } from "./admin-studio.component";
@@ -225,7 +226,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
           }
           @case (AdminTab.ANTENNE) {
             @defer (on immediate) {
-              <app-admin-antenne></app-admin-antenne>
+              <app-admin-antenne [users]="users()" [articles]="articles()"></app-admin-antenne>
               <app-admin-push-composer></app-admin-push-composer>
             } @placeholder { <div class="h-full"></div> }
           }
@@ -276,6 +277,7 @@ export class AdminViewComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private authService = inject(AuthService);
   private supabaseService = inject(SupabaseService);
+  private logger = inject(Logger);
 
   async ngOnInit() {
       try {
@@ -284,7 +286,7 @@ export class AdminViewComponent implements OnInit, OnDestroy {
               this.users.set(data as UserProfile[]);
           }
       } catch (e) {
-          console.warn('Failed initial fetch of users', e);
+          this.logger.warn('admin.users.fetch', e);
       }
 
       this.channelUsers = this.supabaseService.client.channel('public:users')
@@ -365,8 +367,7 @@ export class AdminViewComponent implements OnInit, OnDestroy {
   }
 
   handleSendNotification(event: { target: string; content: string }) {
-    // this.onSendSystemMessage.emit(event);
-    console.log("Send notification", event);
+    this.logger.debug('admin.notification.send', event);
   }
 
   handleEditArticle(articleId: string) {
@@ -374,7 +375,7 @@ export class AdminViewComponent implements OnInit, OnDestroy {
     if (articleToEdit) {
       this.handlePreview(articleToEdit);
     } else {
-      console.warn("Article introuvable ou supprimé.");
+      this.logger.warn('admin.article.notFound', { articleId });
     }
   }
 

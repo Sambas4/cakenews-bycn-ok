@@ -128,7 +128,23 @@ export default tseslint.config(
       '@typescript-eslint/no-inferrable-types': 'warn',
       '@typescript-eslint/unbound-method': 'off',
       '@angular-eslint/no-output-native': 'warn',
+      // All structured logging goes through Logger.* — bare
+      // console.{log,warn,error,debug,info} leak in production
+      // builds and bypass the Sentry/observability sink.
+      'no-console': 'error',
     },
+  },
+  {
+    // The Logger itself wraps native console.* — that's its job.
+    // main.ts uses console.error for a bootstrap-fatal path before
+    // the Angular injector exists; supabase.service.ts warns on
+    // missing env vars at construction time, same constraint.
+    files: [
+      'src/app/services/logger.service.ts',
+      'src/app/services/supabase.service.ts',
+      'src/main.ts',
+    ],
+    rules: { 'no-console': 'off' },
   },
   {
     files: ['**/*.html'],

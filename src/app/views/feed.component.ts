@@ -1,4 +1,5 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, inject, signal, computed, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, inject, signal, computed, HostListener, DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
@@ -113,11 +114,11 @@ export class FeedViewComponent implements OnInit, OnDestroy {
     isLockedHorizontal: false,
   };
 
-  private routerSub: any;
   private viewStartTime: number = Date.now();
+  private destroyRef = inject(DestroyRef);
 
   ngOnInit() {
-    this.route.paramMap.subscribe(params => {
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       const id = params.get('id');
       if (!id) {
         this.currentIndex = 0;
@@ -132,13 +133,14 @@ export class FeedViewComponent implements OnInit, OnDestroy {
       // Otherwise: pin the article on the buffer head so the deep link
       // actually opens the requested article instead of whatever the
       // ranker had on top.
-      const pinned = this.buffer.pinArticle(id);
-      this.currentIndex = pinned ? 0 : 0;
+      this.buffer.pinArticle(id);
+      this.currentIndex = 0;
     });
 
-    this.routerSub = this.router.events.pipe(
-      filter(event => event instanceof NavigationEnd)
-    ).subscribe((event: any) => {
+    this.router.events.pipe(
+      filter(event => event instanceof NavigationEnd),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe((event: NavigationEnd) => {
       if (event.url === '/feed' || event.urlAfterRedirects === '/feed') {
         this.currentIndex = 0;
         if (this.trackRef) {
@@ -157,10 +159,9 @@ export class FeedViewComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.logCurrentDwellTime(); // Enregistrer le temps passé sur l'article en cours à la fermeture
-    if (this.routerSub) {
-      this.routerSub.unsubscribe();
-    }
+    // Log dwell time for the last article when the user navigates away.
+    // RxJS subscriptions clean themselves up via takeUntilDestroyed.
+    this.logCurrentDwellTime();
   }
 
   // --- LOGIC DE CHRONOMÈTRAGE (MICRO SIGNAUX) ---

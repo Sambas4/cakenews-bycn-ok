@@ -2,6 +2,7 @@ import { Injectable, signal, computed, effect, inject } from '@angular/core';
 import { BroadcastCampaign, TickerConfig, ManualRankingEntry } from '../types';
 import { SupabaseService } from './supabase.service';
 import { AuthService } from './auth.service';
+import { Logger } from './logger.service';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 @Injectable({
@@ -23,6 +24,7 @@ export class BroadcastService {
   private channelBroadcasts: RealtimeChannel | null = null;
   private authService = inject(AuthService);
   private supabaseService = inject(SupabaseService);
+  private logger = inject(Logger);
 
   constructor() {
       effect(() => {
@@ -77,7 +79,7 @@ export class BroadcastService {
               .subscribe();
 
       } catch (e) {
-          console.error("Supabase Broadcast Sync Error", e);
+          this.logger.error('broadcast.sync', e);
       }
   }
 
@@ -97,7 +99,7 @@ export class BroadcastService {
     try {
         await this.supabaseService.client.from('broadcasts').upsert({ ...campaign });
     } catch(e) {
-        console.error("Error adding campaign", e);
+        this.logger.error('broadcast.addCampaign', e);
     }
   }
 
@@ -105,7 +107,7 @@ export class BroadcastService {
     try {
         await this.supabaseService.client.from('broadcasts').update({ ...campaign }).eq('id', campaign.id);
     } catch(e) {
-        console.error("Error updating campaign", e);
+        this.logger.error('broadcast.updateCampaign', e);
     }
   }
 
@@ -113,7 +115,7 @@ export class BroadcastService {
     try {
         await this.supabaseService.client.from('broadcasts').delete().eq('id', id);
     } catch(e) {
-        console.error("Error deleting campaign", e);
+        this.logger.error('broadcast.deleteCampaign', e);
     }
   }
 
@@ -122,7 +124,7 @@ export class BroadcastService {
         const newConfig = { ...this.config(), ...updates, id: 'system_config' };
         await this.supabaseService.client.from('broadcasts').upsert(newConfig);
     } catch(e) {
-        console.error("Error updating config", e);
+        this.logger.error('broadcast.updateConfig', e);
     }
   }
 

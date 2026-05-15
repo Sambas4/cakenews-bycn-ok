@@ -2,9 +2,8 @@ import { Component, Input, Output, EventEmitter, inject, ViewChild, ElementRef, 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
-import { BroadcastCampaign, BroadcastType, Article, ManualRankingEntry, Category } from '../../types';
+import { BroadcastCampaign, BroadcastType, Article, ManualRankingEntry, Category, UserProfile } from '../../types';
 import { CATEGORIES } from '../../constants';
-import { MOCK_USERS, MOCK_TICKER_DATA } from '../../data/mockData';
 import { BroadcastService } from '../../services/broadcast.service';
 import { TranslationService } from '../../services/translation.service';
 
@@ -162,14 +161,6 @@ const formatCompactNumber = (number: number) => {
                           <p class="text-[9px] text-zinc-600 uppercase tracking-widest">
                               Aucun classement {{rankingCategoryFilter !== 'TOUT' ? 'en ' + rankingCategoryFilter : 'configuré'}}
                           </p>
-                          @if (config().manualRankings.length === 0) {
-                              <button 
-                                  (click)="handleLoadDemoData()"
-                                  class="mt-4 flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-[9px] font-black uppercase text-zinc-400 hover:text-white"
-                              >
-                                  <lucide-icon name="download" class="w-3 h-3"></lucide-icon> Charger Démo
-                              </button>
-                          }
                       </div>
                   } @else {
                       @for (entry of filteredRankings(); track entry.id; let idx = $index) {
@@ -381,10 +372,10 @@ const formatCompactNumber = (number: number) => {
                           <input type="text" [(ngModel)]="rankingUserSearch" placeholder="Rechercher utilisateur..." class="w-full bg-black border border-zinc-700 rounded-xl py-3 pl-4 pr-4 text-white text-xs font-bold outline-none" />
                           @if (rankingUserSearch && availableUsers().length > 0 && !rankingForm.userId) {
                               <div class="absolute bottom-full left-0 right-0 bg-zinc-900 border border-zinc-700 mb-1 rounded-xl max-h-32 overflow-y-auto z-10 shadow-xl">
-                                  @for (u of availableUsers(); track u.id) {
-                                      <button (click)="rankingForm.userId = u.id; rankingUserSearch = u.name" class="w-full text-left p-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800 last:border-0">
-                                          <img [src]="u.avatar" referrerpolicy="no-referrer" class="w-6 h-6 rounded-full" alt="" />
-                                          <span class="text-xs text-white font-bold">{{u.name}}</span>
+                                  @for (u of availableUsers(); track u.uid) {
+                                      <button (click)="rankingForm.userId = u.uid; rankingUserSearch = u.displayName" class="w-full text-left p-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800 last:border-0">
+                                          <img [src]="u.photoURL || u.avatarUrl || ''" referrerpolicy="no-referrer" class="w-6 h-6 rounded-full" alt="" />
+                                          <span class="text-xs text-white font-bold">{{u.displayName}}</span>
                                       </button>
                                   }
                               </div>
@@ -404,6 +395,7 @@ const formatCompactNumber = (number: number) => {
 })
 export class AdminAntenneComponent implements OnInit {
   @Input() articles: Article[] = [];
+  @Input() users: UserProfile[] = [];
 
   private broadcast = inject(BroadcastService);
   private translation = inject(TranslationService);
@@ -456,21 +448,15 @@ export class AdminAntenneComponent implements OnInit {
     this.updateCategoryTitleEdit();
   }
 
-  availableUsers = computed(() => {
+  availableUsers = computed<UserProfile[]>(() => {
       if (!this.rankingUserSearch) return [];
-      return MOCK_USERS.filter((u: any) => u.name.toLowerCase().includes(this.rankingUserSearch.toLowerCase()));
+      const needle = this.rankingUserSearch.toLowerCase();
+      return this.users.filter(u => (u.displayName ?? '').toLowerCase().includes(needle));
   });
 
-  availableLocations = computed(() => {
-      const locs = new Set<string>();
-      MOCK_USERS.forEach((user: any) => {
-          if (user.location?.isSet) {
-              if (user.location.neighborhood) locs.add(user.location.neighborhood);
-              if (user.location.city) locs.add(user.location.city);
-          }
-      });
-      return Array.from(locs).sort();
-  });
+  // Location is not yet tracked on UserProfile — admins type the
+  // location free-form. Suggestions are intentionally empty.
+  availableLocations = computed<string[]>(() => []);
 
   filteredRankings = computed(() => {
       if (this.rankingCategoryFilter === 'TOUT') return this.config().manualRankings;
@@ -549,13 +535,13 @@ export class AdminAntenneComponent implements OnInit {
   }
 
   handleAddRanking() {
-      const user = MOCK_USERS.find((u: any) => u.id === this.rankingForm.userId);
+      const user = this.users.find(u => u.uid === this.rankingForm.userId);
       if (!user || !this.rankingForm.score || !this.rankingForm.categoryLabel) return;
       const numericScore = parseFloat(this.rankingForm.score);
       const entry: ManualRankingEntry = {
           id: Date.now().toString(),
-          userName: user.name,
-          avatar: user.avatar,
+          userName: user.displayName,
+          avatar: user.photoURL ?? user.avatarUrl ?? '',
           score: formatCompactNumber(numericScore),
           rawValue: numericScore,
           categoryLabel: this.rankingForm.categoryLabel.toUpperCase(),
@@ -575,35 +561,6 @@ export class AdminAntenneComponent implements OnInit {
       if (this.rankingCategoryFilter === 'TOUT') return;
       const newTitles = { ...this.config().categoryTitles, [this.rankingCategoryFilter]: this.categoryTitleEdit };
       this.broadcast.updateConfig({ ...this.config(), categoryTitles: newTitles });
-  }
-
-  handleLoadDemoData() {
-      const demoEntries: ManualRankingEntry[] = [];
-      const newTitles = { ...this.config().categoryTitles };
-      
-      MOCK_TICKER_DATA.forEach((group: any) => {
-          const cat = group.users[0]?.category || 'DIVERS';
-          newTitles[cat] = group.label;
-
-          group.users.forEach((user: any, index: number) => {
-              demoEntries.push({
-                  id: `demo-${Date.now()}-${index}-${user.name}`,
-                  userName: user.name,
-                  avatar: `https://i.pravatar.cc/150?u=${user.name}`,
-                  score: user.score,
-                  rawValue: parseInt(user.score.replace(/\s/g, ''), 10) || 0,
-                  categoryLabel: cat,
-                  color: group.color
-              });
-          });
-      });
-
-      this.broadcast.updateConfig({ 
-          ...this.config(), 
-          manualRankings: demoEntries,
-          rankingMode: 'MANUAL',
-          categoryTitles: newTitles
-      });
   }
 
   handleClearRankings() {

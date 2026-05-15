@@ -2,6 +2,7 @@ import { Component, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { LucideAngularModule } from "lucide-angular";
 import { AuthService } from "../services/auth.service";
+import { Logger } from "../services/logger.service";
 import {
   FormGroup,
   FormControl,
@@ -167,6 +168,7 @@ type AuthMode = "login" | "signup" | "forgot_password";
 })
 export class AuthViewComponent {
   public authService = inject(AuthService);
+  private logger = inject(Logger);
 
   isLoading = signal<boolean>(false);
   errorMessage = signal<string>("");
@@ -231,7 +233,7 @@ export class AuthViewComponent {
         this.setMode("login");
       }
     } catch (e: any) {
-      console.error(e);
+      this.logger.error('auth.submit', e);
       if (e.message) {
         this.errorMessage.set(e.message);
       } else {
@@ -251,7 +253,7 @@ export class AuthViewComponent {
     try {
       await this.authService.loginWithGoogle();
     } catch (e: any) {
-      console.error(e);
+      this.logger.error('auth.googleLogin', e);
       this.errorMessage.set("Erreur de connexion via Google.");
     } finally {
       this.isLoading.set(false);

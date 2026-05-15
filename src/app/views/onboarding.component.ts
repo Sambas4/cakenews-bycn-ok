@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../services/user.service';
+import { Logger } from '../services/logger.service';
 
 type Category = 'Vêtements Noirs' | 'Vêtements Blancs';
 
@@ -115,6 +116,7 @@ export class OnboardingViewComponent {
   private authService = inject(AuthService);
   private userService = inject(UserService);
   private router = inject(Router);
+  private logger = inject(Logger);
 
   username = signal('');
   
@@ -195,8 +197,8 @@ export class OnboardingViewComponent {
 
       this.router.navigate(['/feed']);
     } catch (e: any) {
-      console.error(e);
-      this.errorMessage.set("Une erreur est survénue. Veuillez réessayer.");
+      this.logger.error('onboarding.save', e);
+      this.errorMessage.set("Une erreur est survenue. Veuillez réessayer.");
     } finally {
       this.isSaving.set(false);
     }

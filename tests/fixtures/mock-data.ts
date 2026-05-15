@@ -1,5 +1,5 @@
 
-import { Article, Message, ExternalVoice, AppNotification, ReportTicket, UserData } from '../types';
+import { Article, Message, ExternalVoice, AppNotification, ReportTicket, UserData } from '../../src/app/types';
 
 export const MOCK_USERS: UserData[] = [
   { 
