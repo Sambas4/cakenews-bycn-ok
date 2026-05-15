@@ -36,6 +36,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import webpush from 'https://esm.sh/web-push@3?bundle';
 import { create as createJwt, getNumericDate } from 'https://deno.land/x/[email protected]/mod.ts';
 import { buildCors, handlePreflight } from '../_shared/cors.ts';
+import { checkRateLimit, rateLimitedResponse } from '../_shared/rate-limit.ts';
 
 declare const Deno: {
   env: { get: (key: string) => string | undefined };
@@ -103,6 +104,7 @@ Deno.serve(async (req) => {
   // Auth: only allow staff or service-role calls.
   const authorization = req.headers.get('Authorization');
   const isService = authorization === `Bearer ${SERVICE_ROLE_KEY}`;
+  let rateLimitKey: string | null = null;
   if (!isService) {
     if (!authorization?.startsWith('Bearer ')) return json(401, { error: 'missing_bearer_token' }, cors);
     const { data: { user } } = await admin.auth.getUser(authorization.slice('Bearer '.length));
@@ -111,6 +113,19 @@ Deno.serve(async (req) => {
     if (!['EDITOR', 'MODERATOR', 'ADMIN', 'SUPER_ADMIN'].includes(role)) {
       return json(403, { error: 'forbidden' }, cors);
     }
+    rateLimitKey = `send-push:${user.id}`;
+  }
+
+  // Throttle staff dispatches: 30 broadcasts per editor per hour. The
+  // service-role bypass is intentional — cron and scheduled jobs need
+  // unbounded access. Editor abuse is the realistic threat.
+  if (rateLimitKey) {
+    const verdict = await checkRateLimit(admin, {
+      key: rateLimitKey,
+      max: 30,
+      windowSeconds: 3600,
+    });
+    if (!verdict.allowed) return rateLimitedResponse(verdict, cors);
   }
 
   let body: { audience: Audience; payload: PushPayload };

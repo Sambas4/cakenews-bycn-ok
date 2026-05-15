@@ -17,6 +17,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildCors, handlePreflight } from '../_shared/cors.ts';
+import { checkRateLimit, rateLimitedResponse } from '../_shared/rate-limit.ts';
 
 // `Deno` is available at runtime under the Supabase Edge Functions
 // host. We declare the namespace here so this file type-checks in
@@ -52,6 +53,16 @@ Deno.serve(async (req) => {
 
   // Hard-delete via the service role.
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  // Rate-limit: 3 self-delete attempts per user per hour. Any legitimate
+  // user only needs one; a burst suggests scripted abuse against a
+  // compromised refresh token.
+  const verdict = await checkRateLimit(admin, {
+    key: `delete-account:${user.id}`,
+    max: 3,
+    windowSeconds: 3600,
+  });
+  if (!verdict.allowed) return rateLimitedResponse(verdict, cors);
 
   // Log first so the audit row survives even if the deletion below
   // partially fails.

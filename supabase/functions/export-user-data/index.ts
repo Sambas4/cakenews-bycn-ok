@@ -15,6 +15,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildCors, handlePreflight } from '../_shared/cors.ts';
+import { checkRateLimit, rateLimitedResponse } from '../_shared/rate-limit.ts';
 
 declare const Deno: {
   env: { get: (key: string) => string | undefined };
@@ -46,6 +47,17 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
   const uid = user.id;
+
+  // Rate-limit: 3 exports per user per day. The full envelope is
+  // expensive to assemble (nine table reads + an audit insert), and
+  // there is no legitimate reason to call it more than a handful of
+  // times even during testing.
+  const verdict = await checkRateLimit(admin, {
+    key: `export-user-data:${uid}`,
+    max: 3,
+    windowSeconds: 86_400,
+  });
+  if (!verdict.allowed) return rateLimitedResponse(verdict, cors);
 
   const [
     profile,

@@ -37,6 +37,27 @@ The four Edge Functions audited under Sprint K:
 | `healthcheck`     | `GET`         | Public                           |
 | `send-push`       | `POST`        | Service role **or** staff role   |
 
+## Rate limiting
+
+Privileged Edge Functions throttle calls through the Postgres RPC
+`public.rate_limit_consume(key, max, window_seconds)` introduced in
+migration `0007_rate_limits.sql`. The RPC is fixed-window, fails open
+(returns `allowed = true`) if Postgres is unreachable, and self-prunes
+hourly via `pg_cron`.
+
+| Function          | Key                       | Budget              |
+|-------------------|---------------------------|---------------------|
+| `delete-account`  | `delete-account:<uid>`    | 3 per hour          |
+| `export-user-data`| `export-user-data:<uid>`  | 3 per day           |
+| `send-push`       | `send-push:<uid>`         | 30 per hour (staff) |
+
+The `send-push` service-role path is *not* rate-limited — scheduled
+cron jobs and the digest mailer need unbounded access. Editor abuse via
+an admin session is the realistic threat we're guarding against.
+
+Denied requests return `429 Too Many Requests` with a `Retry-After`
+header (seconds) so the client can back off without polling.
+
 ## Content Security Policy
 
 The SPA ships with a strict CSP (see `index.html` / `vercel.json`). Key
