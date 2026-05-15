@@ -4,6 +4,7 @@ const STORAGE_KEY = 'cake_prefs';
 
 interface PrefsShape {
   reduceMotion?: boolean;
+  largerText?: boolean;
 }
 
 /**
@@ -25,40 +26,45 @@ interface PrefsShape {
 export class MotionPreferenceService {
   private readonly osPref = signal<boolean>(this.detectMediaQuery());
   private readonly userPref = signal<boolean>(this.detectUserPref());
+  private readonly largerTextPref = signal<boolean>(this.detectLargerText());
 
   /** Resolved: true when the user OR the OS asks for reduced motion. */
   readonly reduceMotion = computed(() => this.osPref() || this.userPref());
+
+  /** True when the user wants oversized text (in-app preference only). */
+  readonly largerText = computed(() => this.largerTextPref());
 
   constructor() {
     if (typeof window !== 'undefined' && window.matchMedia) {
       const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
       mql.addEventListener?.('change', (e) => this.osPref.set(e.matches));
     }
-    // Mirror the resolved value onto the document root so CSS can hook
-    // into a single class for global suspension of animations.
     if (typeof document !== 'undefined') {
       const apply = () => {
-        document.documentElement.classList.toggle('cake-reduce-motion', this.reduceMotion());
+        const root = document.documentElement;
+        root.classList.toggle('cake-reduce-motion', this.reduceMotion());
+        root.classList.toggle('cake-larger-text', this.largerText());
       };
       apply();
-      // Microtask so the initial classList reflects the right value
-      // before paint.
       queueMicrotask(apply);
-      // React to in-app preference changes — settings call refresh().
       window.addEventListener('storage', (e) => {
         if (e.key === STORAGE_KEY) {
           this.userPref.set(this.detectUserPref());
+          this.largerTextPref.set(this.detectLargerText());
           apply();
         }
       });
     }
   }
 
-  /** Re-read the in-app preference. Call after writing to settings. */
+  /** Re-read the in-app preferences. Call after writing to settings. */
   refresh(): void {
     this.userPref.set(this.detectUserPref());
+    this.largerTextPref.set(this.detectLargerText());
     if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('cake-reduce-motion', this.reduceMotion());
+      const root = document.documentElement;
+      root.classList.toggle('cake-reduce-motion', this.reduceMotion());
+      root.classList.toggle('cake-larger-text', this.largerText());
     }
   }
 
@@ -68,11 +74,19 @@ export class MotionPreferenceService {
   }
 
   private detectUserPref(): boolean {
+    return this.readPref('reduceMotion');
+  }
+
+  private detectLargerText(): boolean {
+    return this.readPref('largerText');
+  }
+
+  private readPref(key: keyof PrefsShape): boolean {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return false;
       const parsed = JSON.parse(raw) as PrefsShape;
-      return parsed?.reduceMotion === true;
+      return parsed?.[key] === true;
     } catch { return false; }
   }
 }

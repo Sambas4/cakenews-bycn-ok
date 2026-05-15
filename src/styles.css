@@ -124,3 +124,12 @@ html.cake-reduce-motion *::after {
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
 }
+
+/* Larger-text accessibility preference. Bumps the document root font
+ * size which cascades to every rem-based unit. Tailwind's `text-*`
+ * utilities derive from rem so the bulk of the UI scales for free.
+ * Hard pixel values stay put — that's intentional, they're usually
+ * icons or hairlines that should remain crisp. */
+html.cake-larger-text {
+  font-size: 112.5%;
+}

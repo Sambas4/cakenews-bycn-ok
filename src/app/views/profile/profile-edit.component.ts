@@ -78,7 +78,9 @@ const AVATAR_SEEDS = [
             <div class="flex gap-2 flex-wrap">
               @for (c of bgColors; track c) {
                 <button type="button" (click)="avatarBg.set(c)"
-                  class="w-9 h-9 rounded-full border-2 transition-transform hover:scale-110"
+                  [attr.aria-label]="'Couleur de fond ' + c"
+                  [attr.aria-pressed]="avatarBg() === c"
+                  class="w-11 h-11 rounded-full border-2 transition-transform hover:scale-110"
                   [ngStyle]="{ 'background-color': c }"
                   [ngClass]="avatarBg() === c ? 'border-white scale-110 shadow-lg' : 'border-white/10'"></button>
               }

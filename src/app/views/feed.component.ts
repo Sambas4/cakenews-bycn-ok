@@ -158,6 +158,47 @@ export class FeedViewComponent implements OnInit, OnDestroy {
     }
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // Keyboard navigation — required for WCAG 2.1 A. Swipe gestures
+  // are the primary input on mobile but the feed must remain usable
+  // for assistive tech and external keyboards.
+  // ────────────────────────────────────────────────────────────────
+  @HostListener('window:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent) {
+    // Ignore key events while typing in inputs / textareas / contenteditable.
+    const tag = (event.target as HTMLElement | null)?.tagName ?? '';
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+    if ((event.target as HTMLElement | null)?.isContentEditable) return;
+
+    switch (event.key) {
+      case 'ArrowDown':
+      case 'ArrowRight':
+      case 'PageDown':
+      case ' ': // Space advances; matches TikTok / YouTube Shorts.
+      case 'j':
+        event.preventDefault();
+        this.handleNavigateNext();
+        break;
+      case 'ArrowUp':
+      case 'ArrowLeft':
+      case 'PageUp':
+      case 'k':
+        event.preventDefault();
+        this.handleNavigatePrev();
+        break;
+      default:
+        return;
+    }
+  }
+
+  handleNavigatePrev() {
+    if (this.currentIndex <= 0) return;
+    this.logCurrentDwellTime();
+    this.currentIndex -= 1;
+    this.viewStartTime = Date.now();
+    this.updateRoute();
+  }
+
   ngOnDestroy() {
     // Log dwell time for the last article when the user navigates away.
     // RxJS subscriptions clean themselves up via takeUntilDestroyed.

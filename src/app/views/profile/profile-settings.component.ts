@@ -365,7 +365,7 @@ export class ProfileSettingsComponent {
     // Accessibility prefs need to apply *now* — without re-asking
     // MotionPreferenceService to re-read storage, the <html> class
     // would only update on next page load.
-    if (key === 'reduceMotion') this.motion.refresh();
+    if (key === 'reduceMotion' || key === 'largerText') this.motion.refresh();
   }
 
   setDm(value: string) {

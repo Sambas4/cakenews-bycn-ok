@@ -82,8 +82,11 @@ type Category = 'Vêtements Noirs' | 'Vêtements Blancs';
               <div class="flex gap-2 justify-between">
                 @for(color of bgColors; track color) {
                    <button
+                     type="button"
+                     [attr.aria-label]="'Couleur ' + color"
+                     [attr.aria-pressed]="selectedColor() === color"
                      (click)="selectedColor.set(color)"
-                     class="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 transition-transform cursor-pointer hover:scale-110"
+                     class="w-11 h-11 rounded-full border-2 transition-transform cursor-pointer hover:scale-110 flex items-center justify-center"
                      [ngStyle]="{ 'background-color': color }"
                      [ngClass]="selectedColor() === color ? 'border-[#0f2814] scale-110 shadow-md' : 'border-black/10'"
                    ></button>
